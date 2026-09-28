@@ -23,14 +23,18 @@
         </div>
 
         <div class="flex flex-wrap items-center gap-2">
+            @can('clientes.registrar')
             <flux:button wire:click="openCreateModal" variant="primary" icon="plus">
                 Agregar cliente
             </flux:button>
+            @endcan
 
+            @can('clientes.editar')
             <flux:button wire:click="$toggle('showArchived')" variant="outline"
                 :icon="$showArchived ? 'users' : 'archive-box'">
                 {{ $showArchived ? 'Volver a clientes' : 'Dados de baja' }}
             </flux:button>
+            @endcan
         </div>
     </div>
 

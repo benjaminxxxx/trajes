@@ -7,43 +7,34 @@ use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 
+/**
+ * Sincroniza los permisos y roles definidos en config/permissions.php.
+ * Idempotente: se puede volver a correr cada vez que cambie ese archivo.
+ */
 class RolesAndPermissionsSeeder extends Seeder
 {
     public function run(): void
     {
-        // Limpiar caché de permisos antes de crear/asignar
         app(PermissionRegistrar::class)->forgetCachedPermissions();
 
-        $permissions = [
-            'vender',
-            'alquilar',
-            'registrar compra',
-            'registrar proveedor',
-            'registrar categorias de productos',
-            'registrar clientes',
-        ];
+        $permissions = array_keys(config('permissions.permissions'));
 
         foreach ($permissions as $permission) {
-            Permission::firstOrCreate([
-                'name' => $permission,
-                'guard_name' => 'web',
-            ]);
+            Permission::firstOrCreate(['name' => $permission, 'guard_name' => 'web']);
         }
 
-        // Rol admin: NO se le asignan permisos uno por uno.
-        // El bypass general se hace vía Gate::before() en
-        // App\Providers\AppServiceProvider (ver nota abajo).
-        Role::firstOrCreate([
-            'name' => 'admin',
-            'guard_name' => 'web',
-        ]);
+        // Permisos que ya no existen en la configuración (ej. los anteriores
+        // 'vender', 'alquilar'...) se eliminan para no dejar basura asignable.
+        Permission::where('guard_name', 'web')->whereNotIn('name', $permissions)->delete();
 
-        // Rol vendedor: con el set de permisos operativos
-        $vendedorRole = Role::firstOrCreate([
-            'name' => 'vendedor',
-            'guard_name' => 'web',
-        ]);
+        // admin: sin permisos asignados, el acceso total lo da Gate::before.
+        Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
 
-        $vendedorRole->syncPermissions($permissions);
+        foreach (config('permissions.roles') as $roleName => $rolePermissions) {
+            Role::firstOrCreate(['name' => $roleName, 'guard_name' => 'web'])
+                ->syncPermissions($rolePermissions);
+        }
+
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
     }
 }

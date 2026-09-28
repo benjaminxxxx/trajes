@@ -31,6 +31,8 @@ class SupplierIndex extends Component
 
     public function delete(int $id): void
     {
+        $this->authorize('proveedores.registrar');
+
         Supplier::findOrFail($id)->delete();
     }
 
@@ -38,9 +40,9 @@ class SupplierIndex extends Component
     {
         $suppliers = Supplier::query()
             ->when($this->search, function ($query) {
-                $query->where('display_name', 'like', '%' . $this->search . '%')
-                    ->orWhere('document_number', 'like', '%' . $this->search . '%')
-                    ->orWhere('code', 'like', '%' . $this->search . '%');
+                $query->where('display_name', 'like', '%'.$this->search.'%')
+                    ->orWhere('document_number', 'like', '%'.$this->search.'%')
+                    ->orWhere('code', 'like', '%'.$this->search.'%');
             })
             ->latest()
             ->paginate(15);

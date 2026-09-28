@@ -4,6 +4,13 @@
         <h1 class="text-2xl font-semibold text-zinc-900 dark:text-white">Registrar venta</h1>
     </div>
 
+    @if ($redoFromCode)
+        <flux:callout icon="arrow-path" class="mb-5"
+            heading="Rehaciendo la venta anulada {{ $redoFromCode }}">
+            <flux:callout.text>Revisa y corrige los datos antes de registrar. La venta anulada se conserva en el historial.</flux:callout.text>
+        </flux:callout>
+    @endif
+
     <div class="grid gap-5 lg:grid-cols-[1fr_340px]">
         <div class="flex flex-col gap-5">
             {{-- Galería --}}
@@ -11,18 +18,33 @@
                 <h2 class="mb-4 text-lg font-semibold text-zinc-900 dark:text-white">Catálogo</h2>
                 <livewire:shared.product-gallery mode="sale" fieldContext="sale-gallery" key="sale-gallery" />
                 <livewire:shared.product-detail-modal key="sale-product-detail" />
+                <livewire:shared.product-picker key="sale-product-picker" />
             </div>
 
-            {{-- Carrito: todo lo numérico se calcula en Alpine (entangle), sin pegarle al servidor por cada tecla --}}
+            {{-- Carrito: todo lo numérico se calcula en Alpine (entangle), sin pegarle al servidor por cada tecla.
+                 Los precios se ingresan CON IGV (lo que se le dice al cliente) y el IGV se desglosa hacia atrás. --}}
             <div class="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900"
                 x-data="{
                     items: $wire.entangle('items'),
-                    get subtotal() {
-                        return Object.values(this.items).reduce((sum, i) =>
-                            sum + (Number(i.quantity) || 0) * (Number(i.unit_price) || 0) * (1 - (Number(i.discount_percent) || 0) / 100), 0);
+                    round2(value) { return Math.round((Number(value) || 0) * 100) / 100; },
+                    fromPrice(key) {
+                        const item = this.items[key];
+                        item.line_total = this.round2((Number(item.quantity) || 0) * (Number(item.unit_price) || 0));
                     },
-                    get tax() { return this.subtotal * 0.18; },
-                    get total() { return this.subtotal + this.tax; },
+                    fromLineTotal(key) {
+                        const item = this.items[key];
+                        const quantity = Number(item.quantity) || 1;
+                        item.unit_price = this.round2((Number(item.line_total) || 0) / quantity);
+                    },
+                    lineTax(key) {
+                        const total = Number(this.items[key]?.line_total) || 0;
+                        return total - total / 1.18;
+                    },
+                    get total() {
+                        return Object.values(this.items).reduce((sum, i) => sum + (Number(i.line_total) || 0), 0);
+                    },
+                    get subtotal() { return this.total / 1.18; },
+                    get tax() { return this.total - this.subtotal; },
                 }"
             >
                 <h2 class="mb-4 text-lg font-semibold text-zinc-900 dark:text-white">Detalle de la venta</h2>
@@ -46,36 +68,32 @@
                                     </span>
                                     <div class="min-w-0 flex-1">
                                         <p class="truncate text-sm font-semibold text-zinc-900 dark:text-white">{{ $item['product_name'] }}</p>
-                                        <p class="text-xs text-zinc-500">{{ $item['product_code'] }}</p>
+                                        <p class="text-xs text-zinc-500">
+                                            {{ $item['product_code'] }}
+                                            @if (! empty($item['variant_label']))
+                                                · {{ $item['variant_label'] }}
+                                            @endif
+                                        </p>
                                     </div>
-                                    <flux:button icon="square-2-stack" variant="subtle" size="sm"
-                                        wire:click="duplicateItem('{{ $key }}')" title="Duplicar fila (otra talla/color)" />
+                                    @if (! empty($item['physical_product_id']))
+                                        <flux:badge size="sm" color="violet" icon="qr-code">{{ $item['physical_code'] }}</flux:badge>
+                                    @endif
                                     <flux:button icon="trash" variant="subtle" size="sm" wire:click="removeItem('{{ $key }}')" />
                                 </div>
 
-                                @if ($this->isDuplicateVariant($key))
-                                    <p class="mt-2 flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
-                                        <flux:icon icon="information-circle" class="size-3.5" />
-                                        Misma talla/color que otra fila.
-                                    </p>
-                                @endif
-
-                                <div class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
-                                    <flux:select size="sm" label="Talla" x-model="items['{{ $key }}'].size_id">
-                                        <flux:select.option value="">Sin talla</flux:select.option>
-                                        @foreach ($this->sizeOptions($item['category_id']) as $size)
-                                            <flux:select.option value="{{ $size->id }}">{{ $size->name }}</flux:select.option>
-                                        @endforeach
-                                    </flux:select>
-                                    <flux:select size="sm" label="Color" x-model="items['{{ $key }}'].color_id">
-                                        <flux:select.option value="">Sin color</flux:select.option>
-                                        @foreach ($this->colorOptions($item['category_id']) as $color)
-                                            <flux:select.option value="{{ $color->id }}">{{ $color->name }}</flux:select.option>
-                                        @endforeach
-                                    </flux:select>
-                                    <flux:input type="number" min="1" size="sm" label="Cantidad" x-model.number="items['{{ $key }}'].quantity" />
-                                    <flux:input type="number" step="0.01" size="sm" label="P. venta" x-model.number="items['{{ $key }}'].unit_price" />
-                                    <flux:input type="number" step="0.01" size="sm" label="Dcto. %" x-model.number="items['{{ $key }}'].discount_percent" />
+                                @php($isUnit = ! empty($item['physical_product_id']))
+                                <div class="mt-3 grid grid-cols-2 gap-2 {{ $isUnit ? 'sm:grid-cols-3' : 'sm:grid-cols-4' }}">
+                                    @unless ($isUnit)
+                                        <flux:input type="number" min="1" size="sm" label="Cantidad"
+                                            x-model.number="items['{{ $key }}'].quantity" x-on:input="fromPrice('{{ $key }}')" />
+                                    @endunless
+                                    <flux:input type="number" step="0.01" min="0" size="sm" label="P. unit. (inc. IGV)"
+                                        x-model.number="items['{{ $key }}'].unit_price" x-on:input="fromPrice('{{ $key }}')" />
+                                    <flux:input type="number" step="0.01" min="0" size="sm" label="Subtotal (inc. IGV)"
+                                        x-model.number="items['{{ $key }}'].line_total" x-on:input="fromLineTotal('{{ $key }}')" />
+                                    <div class="flex flex-col justify-end pb-2 text-xs text-zinc-500">
+                                        IGV: <span class="font-medium text-zinc-700 dark:text-zinc-300" x-text="'S/ ' + lineTax('{{ $key }}').toFixed(2)"></span>
+                                    </div>
                                 </div>
                             </div>
                         @endforeach
@@ -85,7 +103,7 @@
                 {{-- Resumen inline, actualizado en vivo por Alpine --}}
                 <div class="mt-5 rounded-xl bg-zinc-50 p-4 text-sm dark:bg-zinc-800/60">
                     <div class="flex justify-between text-zinc-500">
-                        <span>Subtotal</span>
+                        <span>Op. gravada (sin IGV)</span>
                         <span x-text="'S/ ' + subtotal.toFixed(2)"></span>
                     </div>
                     <div class="mt-1 flex justify-between text-zinc-500">
@@ -107,14 +125,20 @@
             <div class="flex flex-col gap-4">
                 <div>
                     <flux:label>Cliente</flux:label>
-                    <div class="mt-1">
-                        <livewire:shared.entity-search-select
-                            entityType="client"
-                            fieldContext="sale-client"
-                            :selectedId="$client_id"
-                            :selectedLabel="$client_name"
-                            :key="'sale-client-'.$clientPickerVersion"
-                        />
+                    <div class="mt-1 flex items-start gap-2">
+                        <div class="min-w-0 flex-1">
+                            <livewire:shared.entity-search-select
+                                entityType="client"
+                                fieldContext="sale-client"
+                                :selectedId="$client_id"
+                                :selectedLabel="$client_name"
+                                :key="'sale-client-'.$clientPickerVersion"
+                            />
+                        </div>
+                        @can('clientes.registrar')
+                        <flux:button type="button" icon="plus" variant="outline" wire:click="$dispatch('open-client-modal')"
+                            title="Nuevo cliente" aria-label="Nuevo cliente" />
+                        @endcan
                     </div>
                     <p class="mt-1 text-[11px] text-zinc-500">Opcional: puedes registrar la venta sin cliente.</p>
                 </div>
@@ -142,4 +166,6 @@
             </flux:button>
         </aside>
     </div>
+
+    <livewire:core.client-form-modal key="sale-client-form" />
 </div>

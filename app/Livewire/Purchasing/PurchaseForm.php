@@ -3,9 +3,11 @@
 namespace App\Livewire\Purchasing;
 
 use App\Models\Category;
+use App\Models\Supplier;
 use App\Services\Purchasing\PurchaseService;
 use Flux\Flux;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\On;
 use Livewire\Component;
@@ -14,11 +16,17 @@ class PurchaseForm extends Component
 {
     // Cabecera
     public ?int $supplier_id = null;
+
     public ?string $supplier_name = null;
+
     public string $document_type = 'nota_venta';
+
     public ?string $document_number = null;
+
     public bool $has_invoice_pending = false;
+
     public ?string $issue_date = null;
+
     public ?string $notes = null;
 
     // Detalle: cada item es un array asociativo (no un modelo, es solo borrador)
@@ -47,6 +55,21 @@ class PurchaseForm extends Component
         };
     }
 
+    /**
+     * Proveedor recién creado desde el botón "+": se deja seleccionado y se
+     * remonta el buscador para que lo muestre.
+     */
+    #[On('supplier-created')]
+    public function selectCreatedSupplier(int $supplierId): void
+    {
+        $supplier = Supplier::find($supplierId);
+
+        if ($supplier) {
+            $this->setSupplier($supplier->id, $supplier->display_name);
+            $this->supplierPickerVersion++;
+        }
+    }
+
     #[On('entity-cleared')]
     public function handleEntityCleared(string $context): void
     {
@@ -72,7 +95,7 @@ class PurchaseForm extends Component
      */
     protected function addProductToItems(int $productId, string $productName, ?string $code, array $meta): void
     {
-        $this->items[(string) \Illuminate\Support\Str::uuid()] = [
+        $this->items[(string) Str::uuid()] = [
             'product_id' => $productId,
             'product_name' => $productName,
             'product_code' => $code,
@@ -101,7 +124,7 @@ class PurchaseForm extends Component
             return;
         }
 
-        $this->items[(string) \Illuminate\Support\Str::uuid()] = $this->items[$key];
+        $this->items[(string) Str::uuid()] = $this->items[$key];
     }
 
     /**
@@ -188,6 +211,8 @@ class PurchaseForm extends Component
 
     public function save(PurchaseService $service): void
     {
+        $this->authorize('compras.registrar');
+
         $this->validate([
             'document_type' => 'required|in:nota_venta,boleta,factura',
             'issue_date' => 'required|date',

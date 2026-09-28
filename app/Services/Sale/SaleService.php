@@ -14,23 +14,32 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Único punto de escritura para ventas: descuenta stock de la variante,
- * consume una unidad física (FIFO) si el producto se rastrea individualmente,
- * registra el movimiento de inventario y el ingreso en caja. Simétrico a
- * PurchaseService pero en sentido inverso (salida en vez de entrada).
+ * consume la unidad física elegida (o la más antigua disponible) si el
+ * producto se rastrea individualmente, registra el movimiento de inventario
+ * y el ingreso en caja. Simétrico a PurchaseService pero en sentido inverso.
+ *
+ * Los precios de cada línea llegan CON IGV (es lo que se le dice al cliente:
+ * "150 el terno"); el IGV se desglosa hacia atrás. En sale_details se guardan
+ * precio y subtotal SIN IGV para compararlos directo con unit_cost (margen).
+ *
+ * Cada línea llega como:
+ * [
+ *   'product_id' => int, 'size_id' => ?int, 'color_id' => ?int,
+ *   'quantity' => int, 'unit_price' => float (con IGV),
+ *   'line_total' => ?float (con IGV; si viene, manda sobre quantity × unit_price),
+ *   'physical_product_id' => ?int (prenda puntual elegida; fuerza quantity = 1),
+ * ]
  */
 class SaleService
 {
+    public const TAX_RATE = 0.18;
+
     public function register(array $header, array $lines): Sale
     {
         return DB::transaction(function () use ($header, $lines) {
-            $subtotal = 0;
-
-            foreach ($lines as $line) {
-                $subtotal += $this->lineSubtotal($line);
-            }
-
-            $tax = round($subtotal * 0.18, 2);
-            $total = round($subtotal + $tax, 2);
+            $total = round(array_sum(array_map(fn (array $line) => $this->lineGross($line), $lines)), 2);
+            $subtotal = round($total / (1 + self::TAX_RATE), 2);
+            $tax = round($total - $subtotal, 2);
 
             $sale = Sale::create([
                 'code' => $this->generateCode(),
@@ -66,32 +75,123 @@ class SaleService
         });
     }
 
-    protected function lineSubtotal(array $line): float
+    /**
+     * Anula la venta sin borrarla: devuelve el stock de cada variante, libera
+     * la prenda física vendida, deja el movimiento de inventario de entrada y
+     * registra la salida de caja que compensa el ingreso original.
+     */
+    public function cancel(Sale $sale, string $reason): Sale
     {
-        $qty = (int) $line['quantity'];
-        $unitPrice = (float) $line['unit_price'];
+        return DB::transaction(function () use ($sale, $reason) {
+            $sale = Sale::whereKey($sale->id)->lockForUpdate()->firstOrFail();
+
+            if ($sale->isCancelled()) {
+                throw new \RuntimeException("La venta {$sale->code} ya está anulada.");
+            }
+
+            foreach ($sale->details()->with('variant', 'physicalProduct')->get() as $detail) {
+                $detail->variant->blendAverageCost($detail->quantity, (float) $detail->unit_cost);
+                $detail->variant->increment('stock', $detail->quantity);
+
+                if ($detail->physicalProduct?->status === 'sold') {
+                    $detail->physicalProduct->update([
+                        'status' => 'available',
+                        'sold_at' => null,
+                        'final_sale_price' => null,
+                    ]);
+                }
+
+                InventoryMovement::create([
+                    'product_variant_id' => $detail->product_variant_id,
+                    'physical_product_id' => $detail->physical_product_id,
+                    'user_id' => Auth::id(),
+                    'type' => InventoryMovement::TYPE_IN,
+                    'concept' => InventoryMovement::CONCEPT_SALE_CANCELLED,
+                    'quantity' => $detail->quantity,
+                    'unit_cost' => $detail->unit_cost,
+                    'total_cost' => round((float) $detail->unit_cost * $detail->quantity, 2),
+                    'reference_id' => $detail->id,
+                    'reference_type' => SaleDetail::class,
+                    'notes' => "Anulación de la venta {$sale->code}",
+                ]);
+            }
+
+            CashMovement::create([
+                'user_id' => Auth::id(),
+                'type' => CashMovement::TYPE_EXPENSE,
+                'origin' => CashMovement::ORIGIN_SALE_PAYMENT,
+                'amount' => $sale->total,
+                'payment_method' => 'cash',
+                'reference_id' => $sale->id,
+                'reference_type' => Sale::class,
+                'description' => "Anulación venta {$sale->code}",
+            ]);
+
+            $sale->update([
+                'status' => Sale::STATUS_CANCELLED,
+                'cancelled_at' => now(),
+                'cancelled_by' => Auth::id(),
+                'cancellation_reason' => $reason,
+            ]);
+
+            return $sale;
+        });
+    }
+
+    /**
+     * Importe de la línea CON IGV.
+     */
+    protected function lineGross(array $line): float
+    {
+        if (isset($line['line_total']) && $line['line_total'] !== '') {
+            return round((float) $line['line_total'], 2);
+        }
+
+        $qty = ! empty($line['physical_product_id']) ? 1 : (int) $line['quantity'];
         $discount = (float) ($line['discount_percent'] ?? 0);
 
-        return round($qty * $unitPrice * (1 - $discount / 100), 2);
+        return round($qty * (float) $line['unit_price'] * (1 - $discount / 100), 2);
     }
 
     protected function registerLine(Sale $sale, array $line): SaleDetail
     {
-        $qty = (int) $line['quantity'];
-        $unitPrice = (float) $line['unit_price'];
-        $lineSubtotal = $this->lineSubtotal($line);
+        $physical = null;
 
-        /** @var Product $product */
-        $product = Product::findOrFail($line['product_id']);
+        if (! empty($line['physical_product_id'])) {
+            // Prenda puntual elegida por el usuario (ej. un terno que ya se alquiló).
+            $physical = PhysicalProduct::whereKey($line['physical_product_id'])->lockForUpdate()->first();
 
-        $variant = ProductVariant::where('product_id', $product->id)
-            ->where('color_id', $line['color_id'] ?? null)
-            ->where('size_id', $line['size_id'] ?? null)
-            ->lockForUpdate()
-            ->first();
+            if (! $physical || $physical->status !== 'available') {
+                throw new \RuntimeException('La prenda '.($physical->code ?? '#'.$line['physical_product_id']).' ya no está disponible.');
+            }
 
-        if (! $variant) {
-            throw new \RuntimeException("No existe una variante de \"{$product->name}\" con esa talla/color.");
+            $variant = ProductVariant::whereKey($physical->product_variant_id)->lockForUpdate()->firstOrFail();
+            $product = $variant->product;
+            $qty = 1;
+        } else {
+            /** @var Product $product */
+            $product = Product::findOrFail($line['product_id']);
+            $qty = (int) $line['quantity'];
+
+            $variant = ProductVariant::where('product_id', $product->id)
+                ->where('color_id', $line['color_id'] ?? null)
+                ->where('size_id', $line['size_id'] ?? null)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $variant) {
+                throw new \RuntimeException("No existe una variante de \"{$product->name}\" con esa talla/color.");
+            }
+
+            // Producto con prendas físicas pero sin prenda elegida: se toma la
+            // disponible más antigua (FIFO) para dejar registro de cuál se vendió.
+            if ($product->allow_rental) {
+                $physical = PhysicalProduct::where('product_variant_id', $variant->id)
+                    ->where('status', 'available')
+                    ->orderBy('id')
+                    ->lockForUpdate()
+                    ->first();
+            }
         }
 
         if ($variant->stock < $qty) {
@@ -100,38 +200,31 @@ class SaleService
 
         $variant->decrement('stock', $qty);
 
-        // Si el producto se rastrea por unidad física (se usa también para
-        // alquiler), consumimos la unidad disponible más antigua (FIFO) para
-        // dejar registro de cuál se vendió. Si no, la venta solo afecta el
-        // stock agregado de la variante.
-        $physicalProductId = null;
-        $unitCost = $variant->sale_price ?? 0;
+        $lineGross = $this->lineGross([...$line, 'quantity' => $qty]);
+        $lineNet = round($lineGross / (1 + self::TAX_RATE), 2);
+        $unitNet = round($lineNet / $qty, 2);
 
-        if ($product->allow_rental) {
-            $physical = PhysicalProduct::where('product_variant_id', $variant->id)
-                ->where('status', 'available')
-                ->orderBy('id')
-                ->lockForUpdate()
-                ->first();
+        // Costo exacto: el de la prenda física si la hay; si no, el promedio
+        // ponderado de la variante (ver PurchaseService).
+        $unitCost = round((float) ($physical?->purchase_cost ?? $variant->average_cost), 2);
 
-            if ($physical) {
-                $physical->update([
-                    'status' => 'sold',
-                    'sold_at' => now(),
-                    'final_sale_price' => $unitPrice,
-                ]);
-                $physicalProductId = $physical->id;
-                $unitCost = $physical->purchase_cost ?? $unitCost;
-            }
+        if ($physical) {
+            $physical->update([
+                'status' => 'sold',
+                'sold_at' => now(),
+                'final_sale_price' => $unitNet,
+            ]);
         }
+
+        $physicalProductId = $physical?->id;
 
         $detail = $sale->details()->create([
             'product_variant_id' => $variant->id,
             'physical_product_id' => $physicalProductId,
             'quantity' => $qty,
             'unit_cost' => $unitCost,
-            'unit_price' => $unitPrice,
-            'subtotal' => $lineSubtotal,
+            'unit_price' => $unitNet,
+            'subtotal' => $lineNet,
         ]);
 
         InventoryMovement::create([

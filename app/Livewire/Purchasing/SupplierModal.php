@@ -4,6 +4,8 @@ namespace App\Livewire\Purchasing;
 
 use App\Models\Supplier;
 use App\Services\Purchasing\SupplierService;
+use Flux\Flux;
+use Illuminate\Contracts\View\View;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\On;
 use Livewire\Component;
@@ -11,72 +13,84 @@ use Livewire\Component;
 class SupplierModal extends Component
 {
     public bool $show = false;
+
     public ?int $supplierId = null;
 
-    public string $type = 'individual';
-    public string $document_type = 'DNI';
+    // Por defecto un proveedor es empresa: persona jurídica con RUC.
+    public string $type = 'company';
+
+    public string $document_type = 'RUC';
+
     public string $document_number = '';
-    
+
+    // Muestra los datos opcionales (contacto, banco, notas, estado).
+    public bool $advanced = false;
+
     public ?string $names = null;
+
     public ?string $paternal_last_name = null;
+
     public ?string $maternal_last_name = null;
+
     public ?string $company_name = null;
 
     public ?string $mobile = null;
+
     public ?string $phone = null;
+
     public ?string $email = null;
+
     public ?string $address = null;
 
     public ?string $bank_name = null;
+
     public ?string $account_number = null;
+
     public ?string $cci = null;
+
     public ?string $notes = null;
+
     public bool $is_active = true;
 
     #[On('open-supplier-modal')]
     public function open(?int $supplierId = null): void
     {
         $this->resetValidation();
+        $this->resetExcept('show');
         $this->supplierId = $supplierId;
 
         if ($supplierId) {
             $supplier = Supplier::findOrFail($supplierId);
-            $this->type = $supplier->type;
-            $this->document_type = $supplier->document_type;
-            $this->document_number = $supplier->document_number;
-            $this->names = $supplier->names;
-            $this->paternal_last_name = $supplier->paternal_last_name;
-            $this->maternal_last_name = $supplier->maternal_last_name;
-            $this->company_name = $supplier->company_name;
-            $this->mobile = $supplier->mobile;
-            $this->phone = $supplier->phone;
-            $this->email = $supplier->email;
-            $this->address = $supplier->address;
-            $this->bank_name = $supplier->bank_name;
-            $this->account_number = $supplier->account_number;
-            $this->cci = $supplier->cci;
-            $this->notes = $supplier->notes;
+
+            $this->fill($supplier->only([
+                'type', 'document_type', 'document_number', 'names', 'paternal_last_name', 'maternal_last_name',
+                'company_name', 'mobile', 'phone', 'email', 'address', 'bank_name', 'account_number', 'cci', 'notes',
+            ]));
             $this->is_active = $supplier->is_active;
-        } else {
-            $this->resetExcept(['show']);
-            $this->type = 'individual';
-            $this->document_type = 'DNI';
-            $this->is_active = true;
+
+            // Si ya tiene datos opcionales, se muestra la sección expandida.
+            $this->advanced = collect($supplier->only([
+                'mobile', 'phone', 'email', 'address', 'bank_name', 'account_number', 'cci', 'notes',
+            ]))->filter()->isNotEmpty() || ! $supplier->is_active;
         }
 
         $this->show = true;
     }
 
-    public function updatedType($value): void
+    public function setType(string $type): void
     {
-        $this->document_type = $value === 'company' ? 'RUC' : 'DNI';
+        $this->type = $type === 'individual' ? 'individual' : 'company';
+        $this->document_type = $this->type === 'company' ? 'RUC' : 'DNI';
+        $this->resetValidation();
     }
 
     protected function rules(): array
     {
         return [
             'type' => 'required|in:individual,company',
-            'document_type' => 'required|string|max:20',
+            'document_type' => $this->type === 'company'
+                ? 'required|in:RUC'
+                : 'required|in:DNI,RUC,CE,PASAPORTE',
             'document_number' => [
                 'required',
                 'string',
@@ -103,6 +117,8 @@ class SupplierModal extends Component
 
     public function save(SupplierService $service): void
     {
+        $this->authorize('proveedores.registrar');
+
         $data = $this->validate();
 
         if ($this->supplierId) {
@@ -111,14 +127,16 @@ class SupplierModal extends Component
             $this->dispatch('supplier-saved');
         } else {
             $supplier = $service->crear($data);
+            // El formulario de compra lo escucha para dejarlo seleccionado.
             $this->dispatch('supplier-created', supplierId: $supplier->id);
             $this->dispatch('supplier-saved');
         }
 
         $this->show = false;
+        Flux::toast(variant: 'success', text: 'Proveedor guardado correctamente.');
     }
 
-    public function render()
+    public function render(): View
     {
         return view('livewire.purchasing.supplier-modal');
     }

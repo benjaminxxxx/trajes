@@ -29,6 +29,47 @@ trait ManagesCartItems
         return $key;
     }
 
+    /**
+     * Agrega las líneas elegidas en el ProductPicker. Una prenda física es una
+     * fila propia (se ignora si ya está en el carrito); un producto sin prenda
+     * física suma su cantidad a la fila de la misma variante, si existe.
+     *
+     * @param  array<int, array<string, mixed>>  $items
+     * @param  callable(array<string, mixed>): array<string, mixed>|null  $prepare  ajusta cada fila nueva (ej. line_total)
+     */
+    protected function addPickedItems(array $items, ?callable $prepare = null): void
+    {
+        $prepare ??= fn (array $item) => $item;
+
+        foreach ($items as $item) {
+            if (! empty($item['physical_product_id'])) {
+                $inCart = collect($this->items)->contains(
+                    fn (array $row) => (int) ($row['physical_product_id'] ?? 0) === (int) $item['physical_product_id']
+                );
+
+                if (! $inCart) {
+                    $this->addCartItem($prepare([...$item, 'quantity' => 1, 'discount_percent' => 0]));
+                }
+
+                continue;
+            }
+
+            $existingKey = collect($this->items)->search(fn (array $row) => empty($row['physical_product_id'])
+                && (int) ($row['product_id'] ?? 0) === (int) $item['product_id']
+                && (int) ($row['size_id'] ?? 0) === (int) ($item['size_id'] ?? 0)
+                && (int) ($row['color_id'] ?? 0) === (int) ($item['color_id'] ?? 0));
+
+            if ($existingKey !== false) {
+                $this->items[$existingKey]['quantity'] = (int) $this->items[$existingKey]['quantity'] + (int) $item['quantity'];
+                $this->items[$existingKey] = $prepare($this->items[$existingKey]);
+
+                continue;
+            }
+
+            $this->addCartItem($prepare([...$item, 'discount_percent' => 0]));
+        }
+    }
+
     public function removeItem(string $key): void
     {
         unset($this->items[$key]);
@@ -36,7 +77,8 @@ trait ManagesCartItems
 
     public function duplicateItem(string $key): void
     {
-        if (isset($this->items[$key])) {
+        // Una prenda física es única: no se puede duplicar su fila.
+        if (isset($this->items[$key]) && empty($this->items[$key]['physical_product_id'])) {
             $this->items[(string) Str::uuid()] = $this->items[$key];
         }
     }
@@ -86,6 +128,11 @@ trait ManagesCartItems
             $item['quantity'] = (int) ($item['quantity'] ?? 1);
             $item['unit_price'] = (float) ($item['unit_price'] ?? 0);
             $item['discount_percent'] = (float) ($item['discount_percent'] ?? 0);
+            $item['physical_product_id'] = ! empty($item['physical_product_id']) ? (int) $item['physical_product_id'] : null;
+
+            if (array_key_exists('line_total', $item)) {
+                $item['line_total'] = ($item['line_total'] ?? '') !== '' ? (float) $item['line_total'] : null;
+            }
 
             return $item;
         }, array_values($this->items));
@@ -100,7 +147,7 @@ trait ManagesCartItems
     {
         $item = $this->items[$key] ?? null;
 
-        if (! $item || empty($item['size_id']) || empty($item['color_id'])) {
+        if (! $item || ! empty($item['physical_product_id']) || empty($item['size_id']) || empty($item['color_id'])) {
             return false;
         }
 
@@ -109,7 +156,8 @@ trait ManagesCartItems
                 continue;
             }
 
-            if ((int) ($other['product_id'] ?? 0) === (int) $item['product_id']
+            if (empty($other['physical_product_id'])
+                && (int) ($other['product_id'] ?? 0) === (int) $item['product_id']
                 && (int) $other['size_id'] === (int) $item['size_id']
                 && (int) $other['color_id'] === (int) $item['color_id']) {
                 return true;

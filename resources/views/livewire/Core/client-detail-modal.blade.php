@@ -61,14 +61,20 @@
         <!-- Acciones del Modal -->
         <div
             class="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-2 border-t border-zinc-200/60 dark:border-zinc-800">
-            <flux:button type="button" wire:click="archiveClient" wire:confirm="¿Deseas dar de baja a este cliente?"
-                variant="danger" icon="trash">
-                Dar de baja
-            </flux:button>
+            @can('clientes.editar')
+                <flux:button type="button" wire:click="archiveClient" wire:confirm="¿Deseas dar de baja a este cliente?"
+                    variant="danger" icon="trash">
+                    Dar de baja
+                </flux:button>
 
-            <flux:button type="button" wire:click="openEdit" variant="filled" icon="pencil">
-                Editar cliente
-            </flux:button>
+                <flux:button type="button" wire:click="openEdit" variant="filled" icon="pencil">
+                    Editar cliente
+                </flux:button>
+            @else
+                <flux:modal.close>
+                    <flux:button variant="subtle">Cerrar</flux:button>
+                </flux:modal.close>
+            @endcan
         </div>
     @endif
 </flux:modal>

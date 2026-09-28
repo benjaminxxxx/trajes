@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -13,14 +12,25 @@ class InventoryMovement extends Model
     use HasFactory;
 
     public const TYPE_IN = 'in';
+
     public const TYPE_OUT = 'out';
 
     public const CONCEPT_PURCHASE = 'purchase';
+
+    public const CONCEPT_PURCHASE_CORRECTION = 'purchase_correction';
+
     public const CONCEPT_SALE = 'sale';
+
+    public const CONCEPT_SALE_CANCELLED = 'sale_cancelled';
+
     public const CONCEPT_RENTAL = 'rental';
+
     public const CONCEPT_LOST = 'lost';
+
     public const CONCEPT_STOLEN = 'stolen';
+
     public const CONCEPT_ADJUSTMENT_IN = 'adjustment_in';
+
     public const CONCEPT_ADJUSTMENT_OUT = 'adjustment_out';
 
     protected $fillable = [

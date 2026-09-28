@@ -35,13 +35,13 @@
             <!-- 2. Ventas Directas -->
             <flux:sidebar.group expandable icon="shopping-cart" heading="Ventas"
                 :expanded="request()->routeIs('sale.*')">
-                <flux:sidebar.item icon="calculator" href="{{ route('sale.pos') }}"
-                    :current="request()->routeIs('sale.pos')">
-                    Punto de Venta (POS)
-                </flux:sidebar.item>
                 <flux:sidebar.item href="{{ route('sale.sales.index') }}"
                     :current="request()->routeIs('sale.sales.index')">
-                    Historial de Ventas
+                    Lista de Ventas
+                </flux:sidebar.item>
+                <flux:sidebar.item href="{{ route('sale.sales.create') }}"
+                    :current="request()->routeIs('sale.sales.create')">
+                    Nueva Venta
                 </flux:sidebar.item>
             </flux:sidebar.group>
 
@@ -66,7 +66,7 @@
             <flux:sidebar.group expandable icon="shopping-bag" heading="Compras"
                 :expanded="request()->routeIs('purchasing.*')">
                 <flux:sidebar.item href="{{ route('purchasing.purchases.index') }}"
-                    :current="request()->routeIs('purchasing.purchases.*')">
+                    :current="request()->routeIs('purchasing.purchases.index')">
                     Compras
                 </flux:sidebar.item>
                 <flux:sidebar.item href="{{ route('purchasing.purchases.create') }}"

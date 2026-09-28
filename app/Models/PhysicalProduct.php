@@ -2,17 +2,41 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\DB;
 
 class PhysicalProduct extends Model
 {
     use HasFactory, SoftDeletes;
 
     protected $table = 'physical_products';
+
+    public const STATUS_LABELS = [
+        'available' => 'Disponible',
+        'rented' => 'Alquilada',
+        'sold' => 'Vendida',
+        'maintenance' => 'En mantenimiento',
+        'lost' => 'Perdida',
+        'stolen' => 'Robada',
+        'not_delivered' => 'No entregada',
+        'discharged' => 'Dada de baja',
+    ];
+
+    public const STATUS_COLORS = [
+        'available' => 'emerald',
+        'rented' => 'sky',
+        'sold' => 'violet',
+        'maintenance' => 'amber',
+        'lost' => 'red',
+        'stolen' => 'red',
+        'not_delivered' => 'red',
+        'discharged' => 'zinc',
+    ];
 
     protected $fillable = [
         'code',
@@ -25,6 +49,7 @@ class PhysicalProduct extends Model
         'status',
         'status_note',
         'sold_at',
+        'disposed_at',
     ];
 
     protected $casts = [
@@ -33,7 +58,37 @@ class PhysicalProduct extends Model
         'final_sale_price' => 'decimal:2',
         'rental_price' => 'decimal:2',
         'sold_at' => 'date',
+        'disposed_at' => 'datetime',
     ];
+
+    /**
+     * Estados en que la prenda sale del inventario sin venderse.
+     */
+    public const DISPOSED_STATUSES = ['discharged', 'lost', 'stolen'];
+
+    /**
+     * Registra la fecha exacta de baja al pasar a un estado de baja (y la
+     * limpia si la prenda se recupera), sin depender de quién cambie el estado.
+     */
+    protected static function booted(): void
+    {
+        static::saving(function (PhysicalProduct $unit) {
+            if (! $unit->isDirty('status')) {
+                return;
+            }
+
+            if ($unit->isDisposed()) {
+                $unit->disposed_at ??= now();
+            } else {
+                $unit->disposed_at = null;
+            }
+        });
+    }
+
+    public function isDisposed(): bool
+    {
+        return in_array($this->status, self::DISPOSED_STATUSES);
+    }
 
     // ==========================================
     // RELACIONES PERTENECIENTES (BelongsTo)
@@ -54,6 +109,7 @@ class PhysicalProduct extends Model
     {
         return $this->belongsTo(PurchaseDetail::class, 'purchase_detail_id');
     }
+
     public function physicalProducts(): HasMany
     {
         return $this->hasMany(PhysicalProduct::class, 'product_variant_id');
@@ -61,6 +117,36 @@ class PhysicalProduct extends Model
     // ==========================================
     // SCOPES DE ESTADO
     // ==========================================
+
+    public function rentalDetails(): HasMany
+    {
+        return $this->hasMany(RentalDetail::class);
+    }
+
+    public function saleDetails(): HasMany
+    {
+        return $this->hasMany(SaleDetail::class);
+    }
+
+    public function maintenances(): HasMany
+    {
+        return $this->hasMany(ItemMaintenance::class);
+    }
+
+    /**
+     * Prendas que nunca se operaron: disponibles, sin alquileres, ventas ni
+     * mantenimientos. Son las únicas que se pueden eliminar al corregir
+     * (reducir) la cantidad de una compra.
+     */
+    public function scopeNeverOperated(Builder $query): Builder
+    {
+        return $query->where('status', 'available')
+            ->whereDoesntHave('rentalDetails')
+            ->whereDoesntHave('saleDetails')
+            ->whereNotExists(fn ($q) => $q->select(DB::raw(1))
+                ->from('item_maintenances')
+                ->whereColumn('item_maintenances.physical_product_id', 'physical_products.id'));
+    }
 
     public function scopeAvailable($query)
     {

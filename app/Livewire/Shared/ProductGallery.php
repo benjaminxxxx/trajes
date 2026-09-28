@@ -13,18 +13,20 @@ use Livewire\WithPagination;
 
 /**
  * Grilla de productos reutilizada por Venta y Alquiler. No sabe nada de
- * carritos: solo busca/filtra y dispara `gallery-product-added` con lo que
- * el formulario padre necesita para agregar su propia línea (igual patrón
- * que el buscador de producto en Compras, pero en formato grilla con stock
- * visible, como en el mock de catálogo).
+ * carritos: solo busca/filtra y, al agregar, abre el ProductPicker
+ * (`product-picker-requested`), que es quien arma las líneas del carrito
+ * con la talla/color y la disponibilidad real.
  */
 class ProductGallery extends Component
 {
     use WithPagination;
 
     public string $mode = 'sale'; // 'sale' | 'rental' — decide qué precio/disponibilidad mostrar
+
     public string $fieldContext = 'gallery';
+
     public string $search = '';
+
     public bool $onlyAvailable = false;
 
     public function mount(string $mode = 'sale', string $fieldContext = 'gallery'): void
@@ -125,27 +127,13 @@ class ProductGallery extends Component
         $this->dispatch('product-detail-requested', productId: $productId, mode: $this->mode);
     }
 
+    /**
+     * Abre el ProductPicker: ahí se elige talla/color con disponibilidad real
+     * y, según el producto, las prendas por código o la cantidad.
+     */
     public function addToCart(int $productId): void
     {
-        $product = $this->products->firstWhere('id', $productId)
-            ?? Product::withSum('variants as total_stock', 'stock')
-                ->withMin('variants as sale_price_from', 'sale_price')
-                ->withMin('variants as rental_price_from', 'rental_price')
-                ->findOrFail($productId);
-
-        $price = $this->mode === 'rental'
-            ? ($product->rental_price_from ?? 0)
-            : ($product->sale_price_from ?? $product->price);
-
-        $this->dispatch(
-            'gallery-product-added',
-            context: $this->fieldContext,
-            productId: $product->id,
-            productName: $product->name,
-            code: $product->code,
-            categoryId: $product->category_id,
-            price: (float) $price,
-        );
+        $this->dispatch('product-picker-requested', context: $this->fieldContext, productId: $productId, mode: $this->mode);
     }
 
     public function render()

@@ -1,14 +1,16 @@
-<?php 
+<?php
+
 namespace App\Livewire\Core;
 
 use App\Models\Client;
 use Flux\Flux;
-use Livewire\Component;
 use Livewire\Attributes\On;
+use Livewire\Component;
 
 class ClientDetailModal extends Component
 {
     public ?Client $client = null;
+
     public bool $show = false;
 
     #[On('open-client-detail')]
@@ -33,10 +35,12 @@ class ClientDetailModal extends Component
 
     public function archiveClient(): void
     {
+        $this->authorize('clientes.editar');
+
         if ($this->client) {
             $this->client->delete(); // Soft delete
             $this->dispatch('clientSaved');
-            Flux::toast(variant: 'success',text: 'Cliente dado de baja.');
+            Flux::toast(variant: 'success', text: 'Cliente dado de baja.');
             $this->closeModal();
         }
     }

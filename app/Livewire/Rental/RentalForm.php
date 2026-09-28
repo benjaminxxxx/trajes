@@ -3,6 +3,8 @@
 namespace App\Livewire\Rental;
 
 use App\Livewire\Shared\ManagesCartItems;
+use App\Models\Client;
+use App\Models\Rental;
 use App\Services\Rental\RentalService;
 use Flux\Flux;
 use Livewire\Attributes\On;
@@ -13,40 +15,95 @@ class RentalForm extends Component
     use ManagesCartItems;
 
     public ?int $client_id = null;
+
     public ?string $client_name = null;
+
     public ?string $pickup_date = null;
+
     public ?string $expected_return_date = null;
+
     public float $deposit_amount = 0;
+
     public ?string $notes = null;
 
     public array $items = [];
 
     public int $clientPickerVersion = 0;
 
+    // Código del alquiler anulado desde el que se precargó el formulario.
+    public ?string $redoFromCode = null;
+
     public function mount(): void
     {
         $this->pickup_date = now()->format('Y-m-d\TH:i');
         $this->expected_return_date = now()->addDays(1)->format('Y-m-d\TH:i');
+
+        if ($fromId = request()->integer('from')) {
+            $this->prefillFromCancelledRental($fromId);
+        }
     }
 
-    #[On('gallery-product-added')]
-    public function handleGalleryProduct(string $context, int $productId, string $productName, ?string $code, ?int $categoryId, float $price): void
+    /**
+     * Precarga cliente y prendas de un alquiler anulado para registrarlo de
+     * nuevo con los datos corregidos. Cada detalle es una prenda y vuelve al
+     * carrito como una fila con su código.
+     */
+    protected function prefillFromCancelledRental(int $rentalId): void
     {
-        if ($context !== 'rental-gallery') {
+        $rental = Rental::with([
+            'client:id,display_name',
+            'details.physicalProduct.variant.product:id,name,code,category_id',
+            'details.physicalProduct.variant.size:id,name',
+            'details.physicalProduct.variant.color:id,name',
+        ])
+            ->where('status', Rental::STATUS_CANCELLED)
+            ->find($rentalId);
+
+        if (! $rental) {
             return;
         }
 
-        $this->addCartItem([
-            'product_id' => $productId,
-            'product_name' => $productName,
-            'product_code' => $code,
-            'category_id' => $categoryId,
-            'size_id' => null,
-            'color_id' => null,
-            'quantity' => 1,
-            'unit_price' => $price,
-            'discount_percent' => 0,
-        ]);
+        $this->redoFromCode = $rental->code;
+        $this->client_id = $rental->client_id;
+        $this->client_name = $rental->client?->display_name;
+        $this->deposit_amount = (float) $rental->deposit_amount;
+        $this->notes = $rental->notes;
+
+        foreach ($rental->details as $detail) {
+            $unit = $detail->physicalProduct;
+            $variant = $unit?->variant;
+
+            if (! $variant?->product) {
+                continue;
+            }
+
+            // Se propone la misma prenda si sigue disponible; si no, queda la
+            // línea por talla/color y el servicio toma otra disponible.
+            $isAvailable = $unit->status === 'available';
+
+            $this->addCartItem([
+                'product_id' => $variant->product->id,
+                'product_name' => $variant->product->name,
+                'product_code' => $variant->product->code,
+                'category_id' => $variant->product->category_id,
+                'size_id' => $variant->size_id,
+                'color_id' => $variant->color_id,
+                'physical_product_id' => $isAvailable ? $unit->id : null,
+                'physical_code' => $isAvailable ? $unit->code : null,
+                'variant_label' => $variant->label(),
+                'quantity' => 1,
+                'unit_price' => (float) $detail->price,
+                'discount_percent' => 0,
+            ]);
+        }
+    }
+
+    #[On('product-picker-selected')]
+    public function handlePickedItems(string $context, array $items): void
+    {
+        if ($context === 'rental-gallery') {
+            $this->addPickedItems($items);
+        }
     }
 
     #[On('entity-selected')]
@@ -55,6 +112,22 @@ class RentalForm extends Component
         if ($context === 'rental-client') {
             $this->client_id = $id;
             $this->client_name = $label;
+        }
+    }
+
+    /**
+     * Cliente recién creado desde el botón "+": se deja seleccionado y se
+     * remonta el buscador para que lo muestre.
+     */
+    #[On('client-created')]
+    public function selectCreatedClient(int $clientId): void
+    {
+        $client = Client::find($clientId);
+
+        if ($client) {
+            $this->client_id = $client->id;
+            $this->client_name = $client->display_name;
+            $this->clientPickerVersion++;
         }
     }
 
@@ -69,6 +142,8 @@ class RentalForm extends Component
 
     public function save(RentalService $service): void
     {
+        $this->authorize('alquileres.registrar');
+
         $this->validate([
             'client_id' => 'required|integer',
             'pickup_date' => 'required|date',
@@ -88,7 +163,7 @@ class RentalForm extends Component
                 'notes' => $this->notes,
             ], $this->normalizedLines());
 
-            $this->reset(['client_id', 'client_name', 'deposit_amount', 'notes', 'items']);
+            $this->reset(['client_id', 'client_name', 'deposit_amount', 'notes', 'items', 'redoFromCode']);
             $this->pickup_date = now()->format('Y-m-d\TH:i');
             $this->expected_return_date = now()->addDays(1)->format('Y-m-d\TH:i');
             $this->clientPickerVersion++;

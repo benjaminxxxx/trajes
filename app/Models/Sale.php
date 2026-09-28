@@ -2,8 +2,6 @@
 
 namespace App\Models;
 
-use App\Models\Client;
-use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -13,6 +11,16 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class Sale extends Model
 {
     use HasFactory, SoftDeletes;
+
+    public const STATUS_COMPLETED = 'completed';
+
+    public const STATUS_CANCELLED = 'cancelled';
+
+    public const DOCUMENT_TYPES = [
+        'nota_venta' => 'Nota de venta',
+        'boleta' => 'Boleta',
+        'factura' => 'Factura',
+    ];
 
     protected $fillable = [
         'code',
@@ -27,10 +35,14 @@ class Sale extends Model
         'tax',
         'total',
         'status',
+        'cancelled_at',
+        'cancelled_by',
+        'cancellation_reason',
         'notes',
     ];
 
     protected $casts = [
+        'cancelled_at' => 'datetime',
         'invoice_date' => 'datetime',
         'sale_date' => 'datetime',
         'has_invoice_pending' => 'boolean',
@@ -52,5 +64,15 @@ class Sale extends Model
     public function details(): HasMany
     {
         return $this->hasMany(SaleDetail::class);
+    }
+
+    public function cancelledBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'cancelled_by');
+    }
+
+    public function isCancelled(): bool
+    {
+        return $this->status === self::STATUS_CANCELLED;
     }
 }

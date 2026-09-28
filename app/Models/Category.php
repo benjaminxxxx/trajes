@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -35,6 +36,7 @@ class Category extends Model
     {
         return $this->hasMany(Category::class, 'parent_id')->orderBy('sort_order');
     }
+
     /**
      * Tallas que se pueden usar en productos de esta categoría (ver
      * category_size). El formulario de compra las usa para poblar el
@@ -51,5 +53,10 @@ class Category extends Model
     public function colors(): BelongsToMany
     {
         return $this->belongsToMany(Color::class)->withTimestamps();
+    }
+
+    public function products(): HasMany
+    {
+        return $this->hasMany(Product::class);
     }
 }

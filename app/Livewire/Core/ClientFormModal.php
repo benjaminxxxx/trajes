@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Livewire\Core;
 
 use App\Models\Client;
@@ -12,20 +13,32 @@ class ClientFormModal extends Component
 
     // Propiedades entrelazadas con Alpine
     public string $type = 'individual';
+
     public bool $advanced = false;
 
     // Campos del formulario
     public string $document_type = 'DNI';
+
     public string $document_number = '';
+
     public ?string $names = null;
+
     public ?string $last_name = null;
+
     public ?string $company_name = null;
+
     public ?string $email = null;
+
     public ?string $mobile = null;
+
     public ?string $address = null;
+
     public ?string $birth_date = null;
+
     public ?string $gender = null;
+
     public ?string $notes = null;
+
     public bool $isClientFormOpen = false;
 
     protected $listeners = ['open-client-modal' => 'loadClient'];
@@ -61,11 +74,13 @@ class ClientFormModal extends Component
 
     public function save()
     {
+        $this->authorize($this->editingId ? 'clientes.editar' : 'clientes.registrar');
+
         // Reglas de validación condicionales
         $rules = [
             'type' => 'required|in:individual,company',
             'document_type' => 'required|string',
-            'document_number' => 'required|string|unique:clients,document_number,' . $this->editingId,
+            'document_number' => 'required|string|unique:clients,document_number,'.$this->editingId,
         ];
 
         if ($this->type === 'individual') {
@@ -84,7 +99,9 @@ class ClientFormModal extends Component
                 : $this->company_name;
 
             // Crear/Actualizar en base de datos
-            Client::updateOrCreate(
+            $isNew = ! $this->editingId;
+
+            $client = Client::updateOrCreate(
                 ['id' => $this->editingId],
                 [
                     'uuid' => $this->editingId ? Client::find($this->editingId)->uuid : (string) Str::uuid(),
@@ -104,11 +121,16 @@ class ClientFormModal extends Component
                 ]
             );
 
-            $this->isClientFormOpen = false;;
+            $this->isClientFormOpen = false;
             $this->dispatch('clientSaved');
-            Flux::toast(variant: 'success',text: 'Cliente guardado correctamente.');
+
+            // Los formularios de venta/alquiler lo escuchan para dejarlo seleccionado.
+            if ($isNew) {
+                $this->dispatch('client-created', clientId: $client->id);
+            }
+            Flux::toast(variant: 'success', text: 'Cliente guardado correctamente.');
         } catch (\Throwable $th) {
-            Flux::toast(variant: 'danger',text: $th->getMessage());
+            Flux::toast(variant: 'danger', text: $th->getMessage());
         }
     }
 

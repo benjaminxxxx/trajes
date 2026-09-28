@@ -1,79 +1,118 @@
-<flux:modal wire:model="show" class="md:max-w-3xl">
-    <div class="space-y-6">
-        <div>
-            <flux:heading size="lg" class="text-zinc-900 dark:text-white">
-                {{ $supplierId ? 'Editar Proveedor' : 'Nuevo Proveedor' }}
-            </flux:heading>
-            <flux:subheading class="text-zinc-500 dark:text-zinc-400">
-                Complete los datos fiscales y de contacto del proveedor
-            </flux:subheading>
+<flux:modal wire:model="show" class="w-full max-w-xl">
+    <div class="flex flex-col gap-5">
+        <!-- Header -->
+        <div class="border-b border-zinc-100 pb-4 dark:border-zinc-800">
+            <div class="mb-2 flex items-center gap-2 text-xs font-semibold text-violet-600 dark:text-violet-400">
+                <span class="grid size-6 place-items-center rounded-lg bg-violet-100 dark:bg-violet-950/60">
+                    <flux:icon :icon="$supplierId ? 'pencil-square' : 'plus'" class="size-3.5 text-violet-600 dark:text-violet-400" />
+                </span>
+                {{ $supplierId ? 'Editar registro' : 'Nuevo registro' }}
+            </div>
+            <h2 class="text-2xl font-semibold text-zinc-900 dark:text-white">
+                {{ $supplierId ? 'Editar proveedor' : 'Agregar proveedor' }}
+            </h2>
+            <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                {{ $supplierId ? 'Actualiza los datos del proveedor.' : 'Empieza con lo esencial, puedes completar el resto después.' }}
+            </p>
         </div>
 
-        <form wire:submit="save" class="space-y-4">
-            <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                <flux:select label="Tipo de Personería" wire:model.live="type">
-                    <flux:select.option value="individual">Persona Natural</flux:select.option>
-                    <flux:select.option value="company">Persona Jurídica</flux:select.option>
-                </flux:select>
+        <form wire:submit="save" class="flex flex-col gap-5">
+            <!-- Tipo de persona -->
+            <div>
+                <p class="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-400">Tipo de persona</p>
+                <div class="grid grid-cols-2 gap-3">
+                    @foreach (['company' => ['Persona jurídica', 'building-office'], 'individual' => ['Persona natural', 'user']] as $value => [$label, $icon])
+                        <button type="button" wire:click="setType('{{ $value }}')" @class([
+                            'flex items-center gap-3 rounded-2xl border p-3 text-left transition-all',
+                            'border-violet-500 bg-violet-50/50 dark:border-violet-500/60 dark:bg-violet-950/30' => $type === $value,
+                            'border-zinc-200 hover:border-zinc-300 dark:border-zinc-800 dark:hover:border-zinc-700' => $type !== $value,
+                        ])>
+                            <flux:icon :icon="$icon" class="size-4 text-violet-600 dark:text-violet-400" />
+                            <span class="text-sm font-semibold text-zinc-800 dark:text-zinc-200">{{ $label }}</span>
+                            @if ($type === $value)
+                                <flux:icon icon="check" class="ml-auto size-4 text-violet-600 dark:text-violet-400" />
+                            @endif
+                        </button>
+                    @endforeach
+                </div>
+            </div>
 
-                <flux:select label="Tipo Doc." wire:model.live="document_type">
+            <!-- Documento -->
+            <div class="grid gap-4 sm:grid-cols-[140px_1fr]">
+                <flux:select wire:model="document_type" label="Documento">
                     @if ($type === 'company')
                         <flux:select.option value="RUC">RUC</flux:select.option>
                     @else
                         <flux:select.option value="DNI">DNI</flux:select.option>
                         <flux:select.option value="RUC">RUC (10...)</flux:select.option>
-                        <flux:select.option value="CE">Carné de Extranjería</flux:select.option>
+                        <flux:select.option value="CE">CE</flux:select.option>
                         <flux:select.option value="PASAPORTE">Pasaporte</flux:select.option>
                     @endif
                 </flux:select>
 
-                <flux:input label="N° Documento" wire:model="document_number" placeholder="10203040" required />
+                <flux:input wire:model="document_number" label="Número de documento"
+                    :placeholder="$type === 'company' ? '20607845129' : '72849103'" required />
             </div>
 
+            <!-- Nombre -->
             @if ($type === 'company')
-                <div>
-                    <flux:input label="Razón Social / Nombre Comercial" wire:model="company_name" placeholder="Inversiones S.A.C." required />
-                </div>
+                <flux:input wire:model="company_name" label="Razón social" placeholder="Confecciones Gamarra S.A.C." required />
             @else
-                <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                    <flux:input label="Nombres" wire:model="names" required />
-                    <flux:input label="Apellido Paterno" wire:model="paternal_last_name" required />
-                    <flux:input label="Apellido Materno" wire:model="maternal_last_name" />
+                <div class="grid gap-4 sm:grid-cols-3">
+                    <flux:input wire:model="names" label="Nombres" required />
+                    <flux:input wire:model="paternal_last_name" label="Apellido paterno" required />
+                    <flux:input wire:model="maternal_last_name" label="Apellido materno" />
                 </div>
             @endif
 
-            <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                <flux:input label="Celular" wire:model="mobile" placeholder="987654321" />
-                <flux:input label="Teléfono Fijo" wire:model="phone" />
-                <flux:input label="Correo Electrónico" type="email" wire:model="email" />
-            </div>
-
-            <div>
-                <flux:input label="Dirección Fiscal / Ubicación" wire:model="address" />
-            </div>
-
-            <div class="rounded-lg border border-zinc-200 py-4 dark:border-zinc-800 space-y-3">
-                <h4 class="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Datos Bancarios para Pagos</h4>
-                <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                    <flux:input label="Banco" wire:model="bank_name" placeholder="BCP, Interbank..." />
-                    <flux:input label="N° Cuenta" wire:model="account_number" />
-                    <flux:input label="CCI" wire:model="cci" />
+            <!-- Toggle datos adicionales -->
+            <button type="button" wire:click="$toggle('advanced')"
+                class="flex items-center justify-between rounded-2xl border border-dashed border-zinc-200 bg-zinc-50/50 p-4 text-left transition-colors dark:border-zinc-800 dark:bg-zinc-800/40">
+                <div>
+                    <span class="block text-sm font-semibold text-zinc-800 dark:text-zinc-200">
+                        {{ $advanced ? 'Datos adicionales' : '¿Quieres agregar más datos?' }}
+                    </span>
+                    <span class="mt-0.5 block text-xs text-zinc-500 dark:text-zinc-400">Contacto, dirección, cuenta bancaria y notas</span>
                 </div>
-            </div>
+                <flux:icon :icon="$advanced ? 'chevron-up' : 'document-text'" class="size-5 text-violet-600 dark:text-violet-400" />
+            </button>
 
-            <div>
-                <flux:textarea label="Notas internas" wire:model="notes" rows="2" />
-            </div>
+            @if ($advanced)
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <flux:input wire:model="mobile" type="tel" label="Celular" placeholder="987 654 321" icon="phone" />
+                    <flux:input wire:model="phone" label="Teléfono fijo" />
+                    <div class="sm:col-span-2">
+                        <flux:input wire:model="email" type="email" label="Correo" icon="envelope" />
+                    </div>
+                    <div class="sm:col-span-2">
+                        <flux:input wire:model="address" label="Dirección fiscal" icon="map-pin" />
+                    </div>
 
-            <div class="flex items-center justify-between pt-4">
-                <flux:switch wire:model="is_active" label="Estado Activo" />
+                    <p class="text-xs font-semibold uppercase tracking-wider text-zinc-400 sm:col-span-2">Datos bancarios para pagos</p>
+                    <flux:input wire:model="bank_name" label="Banco" placeholder="BCP, Interbank..." />
+                    <flux:input wire:model="account_number" label="N° de cuenta" />
+                    <div class="sm:col-span-2">
+                        <flux:input wire:model="cci" label="CCI" />
+                    </div>
 
-                <div class="flex items-center gap-2">
-                    <flux:button variant="filled" wire:click="$set('show', false)">Cancelar</flux:button>
-                    <flux:button type="submit" variant="primary">
-                        {{ $supplierId ? 'Actualizar' : 'Guardar Proveedor' }}
-                    </flux:button>
+                    <div class="sm:col-span-2">
+                        <flux:textarea wire:model="notes" label="Notas internas" rows="2" />
+                    </div>
+                    <div class="sm:col-span-2">
+                        <flux:switch wire:model="is_active" label="Proveedor activo" align="left" />
+                    </div>
                 </div>
+            @endif
+
+            <!-- Footer -->
+            <div class="flex flex-col-reverse gap-3 border-t border-zinc-100 pt-5 sm:flex-row sm:justify-end dark:border-zinc-800">
+                <flux:modal.close>
+                    <flux:button variant="subtle">Cancelar</flux:button>
+                </flux:modal.close>
+                <flux:button type="submit" variant="primary">
+                    <span wire:loading.remove wire:target="save">{{ $supplierId ? 'Guardar cambios' : 'Guardar proveedor' }}</span>
+                    <span wire:loading wire:target="save">Guardando...</span>
+                </flux:button>
             </div>
         </form>
     </div>

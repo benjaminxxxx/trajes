@@ -1,11 +1,12 @@
 <?php
+
 namespace App\Livewire\Core;
 
 use App\Models\Client;
 use Flux\Flux;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithPagination;
-use Livewire\Attributes\Url;
 
 class ClientIndex extends Component
 {
@@ -50,6 +51,8 @@ class ClientIndex extends Component
 
     public function restoreClient(int $id): void
     {
+        $this->authorize('clientes.editar');
+
         $client = Client::onlyTrashed()->findOrFail($id);
         $client->restore();
 
@@ -58,6 +61,8 @@ class ClientIndex extends Component
 
     public function forceDeleteClient(int $id): void
     {
+        $this->authorize('clientes.editar');
+
         $client = Client::onlyTrashed()->findOrFail($id);
         $client->forceDelete();
         Flux::toast(variant: 'success', text: 'Cliente eliminado permanentemente.');
@@ -75,8 +80,8 @@ class ClientIndex extends Component
         }
 
         // Aplicar búsqueda por nombre, apellido, razón social o número de documento
-        if (!empty($this->search)) {
-            $searchTerm = '%' . trim($this->search) . '%';
+        if (! empty($this->search)) {
+            $searchTerm = '%'.trim($this->search).'%';
             $query->where(function ($q) use ($searchTerm) {
                 $q->where('names', 'like', $searchTerm)
                     ->orWhere('last_name', 'like', $searchTerm)

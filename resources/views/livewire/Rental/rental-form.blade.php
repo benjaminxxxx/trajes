@@ -4,6 +4,13 @@
         <h1 class="text-2xl font-semibold text-zinc-900 dark:text-white">Registrar alquiler</h1>
     </div>
 
+    @if ($redoFromCode)
+        <flux:callout icon="arrow-path" class="mb-5"
+            heading="Rehaciendo el alquiler anulado {{ $redoFromCode }}">
+            <flux:callout.text>Revisa y corrige los datos antes de registrar. El alquiler anulado se conserva en el historial.</flux:callout.text>
+        </flux:callout>
+    @endif
+
     <div class="grid gap-5 lg:grid-cols-[1fr_340px]">
         <div class="flex flex-col gap-5">
             {{-- Galería --}}
@@ -11,6 +18,7 @@
                 <h2 class="mb-4 text-lg font-semibold text-zinc-900 dark:text-white">Catálogo</h2>
                 <livewire:shared.product-gallery mode="rental" fieldContext="rental-gallery" key="rental-gallery" />
                 <livewire:shared.product-detail-modal key="rental-product-detail" />
+                <livewire:shared.product-picker key="rental-product-picker" />
             </div>
 
             {{-- Carrito: cantidad/precio se calculan en Alpine (entangle) --}}
@@ -44,34 +52,23 @@
                                     </span>
                                     <div class="min-w-0 flex-1">
                                         <p class="truncate text-sm font-semibold text-zinc-900 dark:text-white">{{ $item['product_name'] }}</p>
-                                        <p class="text-xs text-zinc-500">{{ $item['product_code'] }}</p>
+                                        <p class="text-xs text-zinc-500">
+                                            {{ $item['product_code'] }}
+                                            @if (! empty($item['variant_label']))
+                                                · {{ $item['variant_label'] }}
+                                            @endif
+                                        </p>
                                     </div>
-                                    <flux:button icon="square-2-stack" variant="subtle" size="sm"
-                                        wire:click="duplicateItem('{{ $key }}')" title="Duplicar fila (otra talla/color)" />
+                                    @if (! empty($item['physical_product_id']))
+                                        <flux:badge size="sm" color="violet" icon="qr-code">{{ $item['physical_code'] }}</flux:badge>
+                                    @else
+                                        {{-- Viene de "Rehacer" y la prenda original ya no está disponible --}}
+                                        <flux:badge size="sm" color="amber">Se asignará una disponible</flux:badge>
+                                    @endif
                                     <flux:button icon="trash" variant="subtle" size="sm" wire:click="removeItem('{{ $key }}')" />
                                 </div>
 
-                                @if ($this->isDuplicateVariant($key))
-                                    <p class="mt-2 flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
-                                        <flux:icon icon="information-circle" class="size-3.5" />
-                                        Misma talla/color que otra fila.
-                                    </p>
-                                @endif
-
-                                <div class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                                    <flux:select size="sm" label="Talla" x-model="items['{{ $key }}'].size_id">
-                                        <flux:select.option value="">Sin talla</flux:select.option>
-                                        @foreach ($this->sizeOptions($item['category_id']) as $size)
-                                            <flux:select.option value="{{ $size->id }}">{{ $size->name }}</flux:select.option>
-                                        @endforeach
-                                    </flux:select>
-                                    <flux:select size="sm" label="Color" x-model="items['{{ $key }}'].color_id">
-                                        <flux:select.option value="">Sin color</flux:select.option>
-                                        @foreach ($this->colorOptions($item['category_id']) as $color)
-                                            <flux:select.option value="{{ $color->id }}">{{ $color->name }}</flux:select.option>
-                                        @endforeach
-                                    </flux:select>
-                                    <flux:input type="number" min="1" size="sm" label="Cantidad" x-model.number="items['{{ $key }}'].quantity" />
+                                <div class="mt-3 max-w-48">
                                     <flux:input type="number" step="0.01" size="sm" label="Precio alquiler" x-model.number="items['{{ $key }}'].unit_price" />
                                 </div>
                             </div>
@@ -94,14 +91,20 @@
             <div class="flex flex-col gap-4">
                 <div>
                     <flux:label>Cliente *</flux:label>
-                    <div class="mt-1">
-                        <livewire:shared.entity-search-select
-                            entityType="client"
-                            fieldContext="rental-client"
-                            :selectedId="$client_id"
-                            :selectedLabel="$client_name"
-                            :key="'rental-client-'.$clientPickerVersion"
-                        />
+                    <div class="mt-1 flex items-start gap-2">
+                        <div class="min-w-0 flex-1">
+                            <livewire:shared.entity-search-select
+                                entityType="client"
+                                fieldContext="rental-client"
+                                :selectedId="$client_id"
+                                :selectedLabel="$client_name"
+                                :key="'rental-client-'.$clientPickerVersion"
+                            />
+                        </div>
+                        @can('clientes.registrar')
+                        <flux:button type="button" icon="plus" variant="outline" wire:click="$dispatch('open-client-modal')"
+                            title="Nuevo cliente" aria-label="Nuevo cliente" />
+                        @endcan
                     </div>
                     @error('client_id')
                         <p class="mt-1 text-xs text-rose-600">{{ $message }}</p>
@@ -121,4 +124,6 @@
             </flux:button>
         </aside>
     </div>
+
+    <livewire:core.client-form-modal key="rental-client-form" />
 </div>

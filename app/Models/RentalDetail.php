@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use App\Models\PhysicalProduct;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -10,6 +9,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class RentalDetail extends Model
 {
     use HasFactory;
+
+    public const CONDITION_LABELS = [
+        'good' => 'Buena',
+        'dirty' => 'Sucia',
+        'damaged' => 'Dañada',
+        'lost' => 'Perdida',
+    ];
 
     protected $fillable = [
         'rental_id',

@@ -4,29 +4,30 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration {
+return new class extends Migration
+{
     public function up(): void
     {
         // 1. ALQUILERES (Contrato / Encabezado)
         Schema::create('rentals', function (Blueprint $table) {
             $table->id();
             $table->string('code', 30)->unique();
- 
+
             $table->foreignId('client_id')->constrained('clients')->restrictOnDelete();
             $table->foreignId('user_id')->nullable()->constrained('users')->nullOnDelete();
- 
+
             $table->dateTime('pickup_date');
             $table->dateTime('expected_return_date');
             $table->dateTime('actual_return_date')->nullable();
- 
+
             $table->decimal('rental_total', 10, 2)->default(0.00);
             $table->decimal('deposit_amount', 10, 2)->default(0.00);
             $table->decimal('penalty_total', 10, 2)->default(0.00);
- 
+
             $table->enum('status', ['reserved', 'out', 'returned', 'converted_to_sale', 'cancelled'])
                 ->default('out')
                 ->index();
- 
+
             $table->text('notes')->nullable();
             $table->timestamps();
             $table->softDeletes();
@@ -145,14 +146,7 @@ return new class extends Migration {
             $table->id();
             $table->foreignId('user_id')->nullable()->constrained('users')->nullOnDelete();
 
-            $table->enum('category', [
-                'store_rent',
-                'payroll',
-                'utilities',
-                'supplies',
-                'maintenance',
-                'other'
-            ]);
+            $table->string('category');
 
             $table->string('concept');
             $table->decimal('amount', 10, 2);
@@ -176,7 +170,7 @@ return new class extends Migration {
                 'penalty_fee',
                 'operational_expense',
                 'purchase_expense',
-                'other'
+                'other',
             ]);
 
             $table->decimal('amount', 10, 2);
@@ -186,6 +180,24 @@ return new class extends Migration {
 
             $table->text('description')->nullable();
             $table->timestamps();
+        });
+        Schema::create('audit_logs', function (Blueprint $table) {
+            $table->id();
+
+            // Qué se eliminó (tabla/modelo + id). Crea el índice compuesto.
+            $table->morphs('auditable');
+
+            $table->string('event', 30)->default('deleted');
+
+            // Quién. Se guarda también el nombre: si el usuario se borra
+            // después, la bitácora sigue diciendo quién fue.
+            $table->foreignId('user_id')->nullable()->constrained('users')->nullOnDelete();
+            $table->string('user_name')->nullable();
+
+            // Cómo era el registro justo antes de eliminarse.
+            $table->json('old_values');
+
+            $table->timestamp('created_at')->useCurrent();
         });
     }
 
@@ -202,5 +214,6 @@ return new class extends Migration {
         Schema::dropIfExists('rental_media');
         Schema::dropIfExists('rental_details');
         Schema::dropIfExists('rentals');
+        Schema::dropIfExists('audit_logs');
     }
 };

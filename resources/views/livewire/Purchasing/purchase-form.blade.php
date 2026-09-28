@@ -21,18 +21,27 @@
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div class="sm:col-span-2">
                         <flux:label>Proveedor</flux:label>
-                        <div class="mt-1">
-                            <livewire:shared.entity-search-select
-                                entityType="supplier"
-                                fieldContext="purchase-supplier"
-                                :selectedId="$supplier_id"
-                                :selectedLabel="$supplier_name"
-                                :key="'purchase-supplier-'.$supplierPickerVersion"
-                            />
+                        <div class="mt-1 flex items-start gap-2">
+                            <div class="min-w-0 flex-1">
+                                <livewire:shared.entity-search-select
+                                    entityType="supplier"
+                                    fieldContext="purchase-supplier"
+                                    :selectedId="$supplier_id"
+                                    :selectedLabel="$supplier_name"
+                                    :key="'purchase-supplier-'.$supplierPickerVersion"
+                                />
+                            </div>
+                            @can('proveedores.registrar')
+                            <flux:button type="button" icon="plus" variant="outline" wire:click="$dispatch('open-supplier-modal')"
+                                title="Nuevo proveedor" aria-label="Nuevo proveedor" />
+                            @endcan
                         </div>
                     </div>
 
-                    <flux:select wire:model="document_type" label="Tipo de comprobante">
+                    <flux:select wire:model.live="document_type" label="Tipo de comprobante"
+                        :description="$document_type === 'factura'
+                            ? 'Costo de cada prenda: precio SIN IGV (el IGV es crédito fiscal).'
+                            : 'Costo de cada prenda: pago total CON IGV (no hay crédito fiscal).'">
                         <flux:select.option value="nota_venta">Nota de venta</flux:select.option>
                         <flux:select.option value="boleta">Boleta</flux:select.option>
                         <flux:select.option value="factura">Factura</flux:select.option>
@@ -170,4 +179,6 @@
             </p>
         </aside>
     </form>
+
+    <livewire:purchasing.supplier-modal key="purchase-supplier-form" />
 </div>
