@@ -78,6 +78,11 @@ class Rental extends Model
         return $this->hasMany(RentalMedia::class);
     }
 
+    public function documents(): HasMany
+    {
+        return $this->hasMany(RentalMedia::class)->where('type', 'dni')->orderBy('id');
+    }
+
     public function cancelledBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'cancelled_by');

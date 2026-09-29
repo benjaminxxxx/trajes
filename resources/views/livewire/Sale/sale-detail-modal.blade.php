@@ -23,9 +23,15 @@
                             @endif
                         @endif
                     </div>
-                    <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                        Registrada por {{ $sale->user?->name ?? '—' }} el {{ $sale->created_at?->format('d/m/Y H:i') }}
-                    </p>
+                    <div class="mt-1 flex flex-wrap items-center justify-between gap-2">
+                        <p class="text-sm text-zinc-500 dark:text-zinc-400">
+                            Registrada por {{ $sale->user?->name ?? '—' }} el {{ $sale->created_at?->format('d/m/Y H:i') }}
+                        </p>
+                        <flux:button size="sm" icon="document-text" wire:navigate
+                            :href="route('receipts.show', ['type' => 'venta', 'id' => $sale->id])">
+                            Comprobante
+                        </flux:button>
+                    </div>
                 </div>
 
                 @if ($sale->isCancelled())

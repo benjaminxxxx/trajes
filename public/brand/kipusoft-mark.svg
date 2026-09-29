@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Kipusoft">
+  <defs>
+    <linearGradient id="kp-stem" x1="12" y1="8" x2="26" y2="56" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#22B5FF"/>
+      <stop offset="1" stop-color="#1747E0"/>
+    </linearGradient>
+    <linearGradient id="kp-arm" x1="24" y1="40" x2="54" y2="10" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1E6BFF"/>
+      <stop offset="1" stop-color="#22B5FF"/>
+    </linearGradient>
+    <linearGradient id="kp-leg" x1="26" y1="32" x2="54" y2="56" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1747E0"/>
+      <stop offset="1" stop-color="#1E6BFF"/>
+    </linearGradient>
+  </defs>
+  <rect x="11" y="8" width="13" height="48" rx="6.5" fill="url(#kp-stem)"/>
+  <path d="M26.5 32 36.4 20.3l6.1-7.2A6 6 0 0 1 47.1 11h3.6c2.1 0 3.3 2.5 1.9 4.1L32.8 38.4 24 38.9Z" fill="url(#kp-arm)"/>
+  <path d="M28.4 30.9 51.6 49.5c1.7 1.4.7 4.5-1.5 4.5h-5.6a6 6 0 0 1-3.8-1.35L24 39.4Z" fill="url(#kp-leg)"/>
+</svg>

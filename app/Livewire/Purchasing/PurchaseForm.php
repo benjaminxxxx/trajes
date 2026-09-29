@@ -181,8 +181,9 @@ class PurchaseForm extends Component
             $category = Category::with('sizes', 'colors')->find($categoryId);
 
             $this->categoryOptionsCache[$categoryId] = [
-                'sizes' => $category?->sizes ?? collect(),
-                'colors' => $category?->colors ?? collect(),
+                // Las tallas/colores desactivados ya no se ofrecen para nuevas compras.
+                'sizes' => $category?->sizes->where('is_active', true)->values() ?? collect(),
+                'colors' => $category?->colors->where('is_active', true)->values() ?? collect(),
             ];
         }
 

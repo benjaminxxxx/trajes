@@ -91,6 +91,12 @@
                             wire:click="manageMedia({{ $product->id }})">
                             Fotos
                         </flux:button>
+                        @can('inventario.seguimiento')
+                            <flux:button size="sm" variant="ghost" icon="chart-bar" wire:navigate
+                                :href="route('inventory.physical-items.index', ['producto' => $product->id])">
+                                Seguimiento
+                            </flux:button>
+                        @endcan
                         <flux:button size="sm" variant="ghost" icon="trash" color="red"
                             wire:click="delete({{ $product->id }})"
                             wire:confirm="¿Desea enviar a papelera este producto?">
@@ -173,6 +179,14 @@
                                     
                                     <flux:button size="sm" variant="ghost" icon="photo"
                                         @click="$wire.dispatch('manageMedia',{productId:{{ $product->id }}})" />
+
+                                    @can('inventario.seguimiento')
+                                        <flux:tooltip content="Seguimiento de prendas">
+                                            <flux:button size="sm" variant="ghost" icon="chart-bar" wire:navigate
+                                                :href="route('inventory.physical-items.index', ['producto' => $product->id])"
+                                                aria-label="Seguimiento de prendas" />
+                                        </flux:tooltip>
+                                    @endcan
 
                                     <flux:button size="sm" variant="ghost" icon="trash" color="red"
                                         wire:click="delete({{ $product->id }})"

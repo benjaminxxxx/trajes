@@ -3,6 +3,8 @@
 namespace App\Livewire\Rental;
 
 use App\Models\Rental;
+use App\Models\RentalMedia;
+use App\Services\Rental\RentalDocumentService;
 use App\Services\Rental\RentalService;
 use Flux\Flux;
 use Illuminate\Contracts\View\View;
@@ -17,6 +19,8 @@ use Livewire\Component;
  */
 class RentalDetailModal extends Component
 {
+    use ManagesDocumentPhotos;
+
     public ?int $rentalId = null;
 
     public bool $isOpen = false;
@@ -68,6 +72,7 @@ class RentalDetailModal extends Component
             'details.physicalProduct.variant.product:id,name,code',
             'details.physicalProduct.variant.size:id,name',
             'details.physicalProduct.variant.color:id,name',
+            'documents',
         ])->findOrFail($this->rentalId);
     }
 
@@ -106,6 +111,35 @@ class RentalDetailModal extends Component
         $this->rental->update($validated);
 
         $this->afterChange('Alquiler actualizado correctamente.');
+    }
+
+    /**
+     * Adjunta más fotos del documento a un alquiler ya registrado (ej. faltó el reverso).
+     */
+    public function saveDocuments(RentalDocumentService $documents): void
+    {
+        $this->authorize('alquileres.registrar');
+        abort_unless($this->rental, 404);
+
+        $this->validate($this->documentPhotoRules(required: true), [
+            'documentPhotos.required' => 'Toma o elige al menos una foto.',
+        ]);
+
+        $documents->attach($this->rental, $this->pendingDocumentPhotos());
+
+        $this->resetDocumentPhotos();
+        unset($this->rental);
+        Flux::toast(variant: 'success', text: 'Fotos del documento agregadas.');
+    }
+
+    public function deleteDocument(int $mediaId, RentalDocumentService $documents): void
+    {
+        $this->authorize('alquileres.editar');
+
+        $documents->delete(RentalMedia::where('rental_id', $this->rentalId)->findOrFail($mediaId));
+
+        unset($this->rental);
+        Flux::toast(variant: 'success', text: 'Foto eliminada.');
     }
 
     public function cancel(RentalService $service): void

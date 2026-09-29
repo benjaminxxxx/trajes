@@ -215,6 +215,9 @@ class SaleForm extends Component
 
             Flux::toast(variant: 'success', text: "Venta {$sale->code} registrada correctamente.");
             $this->dispatch('saleSaved', saleId: $sale->id);
+
+            // Tras registrar se muestra el comprobante listo para compartir.
+            $this->redirectRoute('receipts.show', ['type' => 'venta', 'id' => $sale->id], navigate: true);
         } catch (\Throwable $th) {
             report($th);
             Flux::toast(variant: 'danger', text: 'No se pudo registrar la venta: '.$th->getMessage());

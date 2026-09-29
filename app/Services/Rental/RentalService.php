@@ -232,6 +232,7 @@ class RentalService
             }
 
             $physical->update(['status' => 'rented']);
+            app(ReservationService::class)->fulfilledByRental($physical, $rental->client_id);
 
             $rental->details()->create([
                 'physical_product_id' => $physical->id,
@@ -269,6 +270,7 @@ class RentalService
             }
 
             $physical->update(['status' => 'rented']);
+            app(ReservationService::class)->fulfilledByRental($physical, $rental->client_id);
 
             $rental->details()->create([
                 'physical_product_id' => $physical->id,

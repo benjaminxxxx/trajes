@@ -5,14 +5,18 @@ namespace App\Livewire\Rental;
 use App\Livewire\Shared\ManagesCartItems;
 use App\Models\Client;
 use App\Models\Rental;
+use App\Services\Rental\RentalDocumentService;
 use App\Services\Rental\RentalService;
+use App\Services\Rental\ReservationService;
 use Flux\Flux;
+use Illuminate\Support\Facades\DB;
+use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
 use Livewire\Component;
 
 class RentalForm extends Component
 {
-    use ManagesCartItems;
+    use ManagesCartItems, ManagesDocumentPhotos;
 
     public ?int $client_id = null;
 
@@ -32,6 +36,12 @@ class RentalForm extends Component
 
     // Código del alquiler anulado desde el que se precargó el formulario.
     public ?string $redoFromCode = null;
+
+    // Alquiler anulado cuyas fotos del DNI se reutilizan si no se toman nuevas.
+    #[Locked]
+    public ?int $redoFromId = null;
+
+    public int $reusableDocuments = 0;
 
     public function mount(): void
     {
@@ -64,6 +74,8 @@ class RentalForm extends Component
         }
 
         $this->redoFromCode = $rental->code;
+        $this->redoFromId = $rental->id;
+        $this->reusableDocuments = $rental->documents()->count();
         $this->client_id = $rental->client_id;
         $this->client_name = $rental->client?->display_name;
         $this->deposit_amount = (float) $rental->deposit_amount;
@@ -140,7 +152,46 @@ class RentalForm extends Component
         }
     }
 
-    public function save(RentalService $service): void
+    /**
+     * Separa las prendas del carrito para el cliente (hasta la fecha de salida)
+     * sin registrar el alquiler. Solo marca: no bloquea venderlas ni alquilarlas.
+     */
+    public function reserve(ReservationService $reservations): void
+    {
+        $this->authorize('alquileres.registrar');
+
+        $unitIds = collect($this->items)->pluck('physical_product_id')->filter()->map(fn ($id) => (int) $id)->values()->all();
+
+        $this->validate([
+            'client_id' => ['required', 'integer', 'exists:clients,id'],
+            'pickup_date' => ['required', 'date'],
+        ], [
+            'client_id.required' => 'Elige para qué cliente se separan las prendas.',
+        ]);
+
+        if ($unitIds === []) {
+            $this->addError('items', 'Agrega al menos una prenda para separarla.');
+
+            return;
+        }
+
+        $count = $reservations->reserve(
+            $unitIds,
+            Client::findOrFail($this->client_id),
+            substr($this->pickup_date, 0, 10),
+            $this->notes,
+        );
+
+        Flux::toast(variant: 'success', text: "{$count} prenda(s) separadas para {$this->client_name}.");
+
+        $this->reset(['client_id', 'client_name', 'deposit_amount', 'notes', 'items', 'redoFromCode', 'redoFromId', 'reusableDocuments']);
+        $this->resetDocumentPhotos();
+        $this->pickup_date = now()->format('Y-m-d\TH:i');
+        $this->expected_return_date = now()->addDays(1)->format('Y-m-d\TH:i');
+        $this->clientPickerVersion++;
+    }
+
+    public function save(RentalService $service, RentalDocumentService $documents): void
     {
         $this->authorize('alquileres.registrar');
 
@@ -149,27 +200,45 @@ class RentalForm extends Component
             'pickup_date' => 'required|date',
             'expected_return_date' => 'required|date|after:pickup_date',
             'items' => 'required|array|min:1',
+            ...$this->documentPhotoRules(required: $this->reusableDocuments === 0),
         ], [
             'client_id.required' => 'Elige un cliente para el alquiler.',
             'items.required' => 'Agrega al menos una prenda al alquiler.',
+            'documentPhotos.required' => 'Toma al menos una foto del DNI del cliente.',
+            'documentPhotos.max' => 'Puedes adjuntar hasta 6 fotos.',
         ]);
 
         try {
-            $rental = $service->register([
-                'client_id' => $this->client_id,
-                'pickup_date' => $this->pickup_date,
-                'expected_return_date' => $this->expected_return_date,
-                'deposit_amount' => $this->deposit_amount,
-                'notes' => $this->notes,
-            ], $this->normalizedLines());
+            // Alquiler y fotos del DNI van juntos: si una foto falla, no queda el alquiler a medias.
+            $rental = DB::transaction(function () use ($service, $documents) {
+                $rental = $service->register([
+                    'client_id' => $this->client_id,
+                    'pickup_date' => $this->pickup_date,
+                    'expected_return_date' => $this->expected_return_date,
+                    'deposit_amount' => $this->deposit_amount,
+                    'notes' => $this->notes,
+                ], $this->normalizedLines());
 
-            $this->reset(['client_id', 'client_name', 'deposit_amount', 'notes', 'items', 'redoFromCode']);
+                if ($this->documentPhotos !== []) {
+                    $documents->attach($rental, $this->pendingDocumentPhotos());
+                } elseif ($this->redoFromId) {
+                    $documents->copy(Rental::findOrFail($this->redoFromId), $rental);
+                }
+
+                return $rental;
+            });
+
+            $this->reset(['client_id', 'client_name', 'deposit_amount', 'notes', 'items', 'redoFromCode', 'redoFromId', 'reusableDocuments']);
+            $this->resetDocumentPhotos();
             $this->pickup_date = now()->format('Y-m-d\TH:i');
             $this->expected_return_date = now()->addDays(1)->format('Y-m-d\TH:i');
             $this->clientPickerVersion++;
 
             Flux::toast(variant: 'success', text: "Alquiler {$rental->code} registrado correctamente.");
             $this->dispatch('rentalSaved', rentalId: $rental->id);
+
+            // Tras registrar se muestra el comprobante listo para compartir.
+            $this->redirectRoute('receipts.show', ['type' => 'alquiler', 'id' => $rental->id], navigate: true);
         } catch (\Throwable $th) {
             report($th);
             Flux::toast(variant: 'danger', text: 'No se pudo registrar el alquiler: '.$th->getMessage());

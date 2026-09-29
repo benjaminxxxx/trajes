@@ -42,6 +42,7 @@ return [
         // Inventario
         'inventario.productos' => 'Gestionar el catálogo de productos',
         'inventario.categorias' => 'Gestionar categorías',
+        'inventario.atributos' => 'Gestionar tallas, colores y marcas',
         'inventario.seguimiento' => 'Ver el seguimiento de prendas',
 
         // Compras
@@ -56,8 +57,6 @@ return [
         'mantenimiento.registrar' => 'Registrar mantenimientos de prendas',
 
         // Finanzas
-        'finanzas.caja' => 'Caja chica y arqueo',
-        'finanzas.pagos' => 'Pagos y cobros',
         'finanzas.gastos' => 'Gastos operativos',
 
         // Seguridad

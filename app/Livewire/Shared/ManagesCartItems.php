@@ -3,6 +3,7 @@
 namespace App\Livewire\Shared;
 
 use App\Models\Category;
+use App\Models\PhysicalProduct;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
@@ -70,6 +71,27 @@ trait ManagesCartItems
         }
     }
 
+    /**
+     * Separaciones de las prendas físicas del carrito, para avisar (sin
+     * bloquear) cuando una prenda está separada para otro cliente.
+     *
+     * @return Collection<int, PhysicalProduct> indexadas por id de prenda
+     */
+    public function cartReservations(): Collection
+    {
+        $unitIds = collect($this->items)->pluck('physical_product_id')->filter()->all();
+
+        if ($unitIds === []) {
+            return collect();
+        }
+
+        return PhysicalProduct::whereKey($unitIds)
+            ->reserved()
+            ->with('reservedClient:id,display_name')
+            ->get(['id', 'reserved_client_id', 'reserved_until', 'reservation_note'])
+            ->keyBy('id');
+    }
+
     public function removeItem(string $key): void
     {
         unset($this->items[$key]);
@@ -107,8 +129,8 @@ trait ManagesCartItems
             $category = Category::with('sizes', 'colors')->find($categoryId);
 
             $this->categoryOptionsCache[$categoryId] = [
-                'sizes' => $category?->sizes ?? collect(),
-                'colors' => $category?->colors ?? collect(),
+                'sizes' => $category?->sizes->where('is_active', true)->values() ?? collect(),
+                'colors' => $category?->colors->where('is_active', true)->values() ?? collect(),
             ];
         }
 

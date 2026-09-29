@@ -19,14 +19,6 @@
                     @endif
                 </div>
 
-                <div class="flex gap-2">
-                    <flux:button :href="route('sale.sales.create')" wire:navigate variant="primary" icon="shopping-cart">
-                        Vender
-                    </flux:button>
-                    <flux:button :href="route('rental.rentals.create')" wire:navigate icon="sparkles">
-                        Alquilar
-                    </flux:button>
-                </div>
             </div>
         </div>
 

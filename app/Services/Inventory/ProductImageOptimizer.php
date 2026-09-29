@@ -36,12 +36,17 @@ class ProductImageOptimizer
     /**
      * Devuelve el binario JPEG optimizado de la imagen indicada.
      */
-    public function optimize(string $sourcePath): string
-    {
+    public function optimize(
+        string $sourcePath,
+        int $maxWidth = self::MAX_WIDTH,
+        int $maxHeight = self::MAX_HEIGHT,
+        int $quality = self::QUALITY,
+    ): string {
         return ImageManager::usingDriver(Driver::class)
             ->decodePath($sourcePath)
-            ->scaleDown(self::MAX_WIDTH, self::MAX_HEIGHT)
-            ->encode(new JpegEncoder(quality: self::QUALITY, strip: true))
+            ->orient()
+            ->scaleDown($maxWidth, $maxHeight)
+            ->encode(new JpegEncoder(quality: $quality, strip: true))
             ->toString();
     }
 }

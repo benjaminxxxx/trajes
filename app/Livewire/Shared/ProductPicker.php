@@ -132,6 +132,7 @@ class ProductPicker extends Component
         return PhysicalProduct::where('product_variant_id', $variant->id)
             ->where('status', 'available')
             ->withCount('rentalDetails')
+            ->with('reservedClient:id,display_name')
             ->orderBy('code')
             ->get()
             ->each(fn (PhysicalProduct $unit) => $unit->suggested_price = $this->unitPrice($unit, $variant));

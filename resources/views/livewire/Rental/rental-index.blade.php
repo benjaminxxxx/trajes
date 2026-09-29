@@ -23,6 +23,12 @@
                 Nuevo alquiler
             </flux:button>
             @endcan
+            <flux:button icon="bookmark" wire:click="$dispatch('open-reservations')">
+                Separadas
+                @if ($reservedCount > 0)
+                    <flux:badge size="sm" color="amber" class="ml-1">{{ $reservedCount }}</flux:badge>
+                @endif
+            </flux:button>
             <flux:button icon="chart-bar" wire:click="$dispatch('open-category-summary')">
                 Resumen anual
             </flux:button>
@@ -108,4 +114,5 @@
 
     <livewire:rental.rental-detail-modal />
     <livewire:shared.category-year-summary type="rentals" />
+    <livewire:rental.reservations-modal />
 </div>

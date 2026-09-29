@@ -60,6 +60,7 @@
                     </div>
                 @else
                     <div class="flex flex-col gap-3">
+                        @php($reservations = $this->cartReservations())
                         @foreach ($items as $key => $item)
                             <div class="rounded-xl border border-zinc-200 p-3 dark:border-zinc-700" wire:key="sale-item-{{ $key }}">
                                 <div class="flex items-start gap-3">
@@ -80,6 +81,11 @@
                                     @endif
                                     <flux:button icon="trash" variant="subtle" size="sm" wire:click="removeItem('{{ $key }}')" />
                                 </div>
+
+                                @include('livewire.shared.partials.reservation-warning', [
+                                    'reservation' => $reservations->get((int) ($item['physical_product_id'] ?? 0)),
+                                    'clientId' => $client_id,
+                                ])
 
                                 @php($isUnit = ! empty($item['physical_product_id']))
                                 <div class="mt-3 grid grid-cols-2 gap-2 {{ $isUnit ? 'sm:grid-cols-3' : 'sm:grid-cols-4' }}">

@@ -44,6 +44,7 @@
                     </div>
                 @else
                     <div class="flex flex-col gap-3">
+                        @php($reservations = $this->cartReservations())
                         @foreach ($items as $key => $item)
                             <div class="rounded-xl border border-zinc-200 p-3 dark:border-zinc-700" wire:key="rental-item-{{ $key }}">
                                 <div class="flex items-start gap-3">
@@ -67,6 +68,11 @@
                                     @endif
                                     <flux:button icon="trash" variant="subtle" size="sm" wire:click="removeItem('{{ $key }}')" />
                                 </div>
+
+                                @include('livewire.shared.partials.reservation-warning', [
+                                    'reservation' => $reservations->get((int) ($item['physical_product_id'] ?? 0)),
+                                    'clientId' => $client_id,
+                                ])
 
                                 <div class="mt-3 max-w-48">
                                     <flux:input type="number" step="0.01" size="sm" label="Precio alquiler" x-model.number="items['{{ $key }}'].unit_price" />
@@ -115,6 +121,13 @@
                 <flux:input wire:model="expected_return_date" type="datetime-local" label="Devolución prevista" />
                 <flux:input wire:model="deposit_amount" type="number" step="0.01" label="Garantía / adelanto (S/)" />
 
+                @include('livewire.rental.partials.document-photos', ['required' => $reusableDocuments === 0])
+                @if ($reusableDocuments > 0 && empty($documentPhotos))
+                    <p class="-mt-2 text-[11px] text-brand-600 dark:text-brand-400">
+                        Se reutilizarán las {{ $reusableDocuments }} fotos del alquiler {{ $redoFromCode }} si no tomas nuevas.
+                    </p>
+                @endif
+
                 <flux:textarea wire:model="notes" label="Notas" rows="2" />
             </div>
 
@@ -122,6 +135,15 @@
                 <span wire:loading.remove wire:target="save">Registrar alquiler</span>
                 <span wire:loading wire:target="save">Guardando...</span>
             </flux:button>
+
+            {{-- Separar: marca las prendas para el cliente hasta la fecha de salida, sin alquilarlas aún. --}}
+            <flux:button wire:click="reserve" variant="outline" class="mt-2 w-full" icon="bookmark">
+                <span wire:loading.remove wire:target="reserve">Solo separar prendas</span>
+                <span wire:loading wire:target="reserve">Separando...</span>
+            </flux:button>
+            <p class="mt-1.5 text-center text-[11px] text-zinc-500">
+                Quedan separadas hasta la fecha de salida; no impide venderlas ni alquilarlas.
+            </p>
         </aside>
     </div>
 

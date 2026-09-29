@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Rental;
 
+use App\Models\PhysicalProduct;
 use App\Models\Rental;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\On;
@@ -30,6 +31,7 @@ class RentalIndex extends Component
     }
 
     #[On('rentalUpdated')]
+    #[On('reservationsChanged')]
     public function refreshList(): void
     {
         //
@@ -64,6 +66,7 @@ class RentalIndex extends Component
         return view('livewire.rental.rental-index', [
             'rentals' => $rentals,
             'overdueCount' => Rental::where('status', Rental::STATUS_OUT)->where('expected_return_date', '<', now())->count(),
+            'reservedCount' => PhysicalProduct::reserved()->count(),
         ]);
     }
 }

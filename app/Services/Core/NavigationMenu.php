@@ -38,9 +38,6 @@ class NavigationMenu
 
             $items = array_map(fn (array $item) => [...$item, 'current' => $this->isCurrent($item)], $items);
 
-            // El primer separador visible no tiene sentido (quedaría arriba del todo).
-            $items[0]['separator'] = false;
-
             $menu[] = [
                 ...$entry,
                 'items' => $items,
@@ -49,6 +46,29 @@ class NavigationMenu
         }
 
         return $menu;
+    }
+
+    /**
+     * Accesos directos a Vender y Alquilar. Cada uno se oculta dentro de su
+     * propio módulo (en Ventas solo se ofrece Alquilar, y al revés).
+     *
+     * @return array<int, array{label: string, icon: string, route: string}>
+     */
+    public function quickActions(?User $user): array
+    {
+        if (! $user) {
+            return [];
+        }
+
+        $actions = [
+            ['label' => 'Vender', 'icon' => 'shopping-cart', 'route' => 'sale.sales.create', 'module' => 'sale.*', 'permission' => 'ventas.registrar'],
+            ['label' => 'Alquilar', 'icon' => 'sparkles', 'route' => 'rental.rentals.create', 'module' => 'rental.*', 'permission' => 'alquileres.registrar'],
+        ];
+
+        return array_values(array_filter(
+            $actions,
+            fn (array $action) => $user->can($action['permission']) && ! request()->routeIs($action['module']),
+        ));
     }
 
     protected function allows(User $user, array $entry): bool

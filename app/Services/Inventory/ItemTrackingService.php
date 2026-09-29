@@ -58,6 +58,7 @@ class ItemTrackingService
             'variant.size:id,name',
             'variant.color:id,name',
             'purchaseDetail.purchase.supplier:id,display_name',
+            'reservedClient:id,display_name',
         ]);
 
         $rentals = $unit->rentalDetails()

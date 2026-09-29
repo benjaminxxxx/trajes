@@ -168,8 +168,11 @@ class CategoryFormModal extends Component
                 ->when($this->editingId, fn ($q) => $q->whereKeyNot($this->editingId))
                 ->orderBy('name')
                 ->get(['id', 'name']),
-            'sizesByType' => Size::orderBy('sort_order')->get(['id', 'name', 'type'])->groupBy('type'),
-            'colors' => Color::orderBy('name')->get(['id', 'name', 'hex_code']),
+            // Solo las activas, más las inactivas que la categoría ya tenía (para no perderlas al guardar).
+            'sizesByType' => Size::where(fn ($q) => $q->where('is_active', true)->orWhereIn('id', $this->selectedSizes))
+                ->orderBy('sort_order')->get(['id', 'name', 'type'])->groupBy('type'),
+            'colors' => Color::where(fn ($q) => $q->where('is_active', true)->orWhereIn('id', $this->selectedColors))
+                ->orderBy('name')->get(['id', 'name', 'hex_code']),
         ]);
     }
 }

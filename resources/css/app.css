@@ -28,16 +28,52 @@
     --color-zinc-900: var(--color-slate-900);
     --color-zinc-950: var(--color-slate-950);
 }
+/*
+ * Identidad Kipusoft: azul de marca (#1E6BFF) con degradado a cian (#22B5FF)
+ * sobre navy (#070B1A). Logos en public/brand/.
+ */
 @theme {
-    --color-accent: var(--color-fuchsia-600);
-    --color-accent-content: var(--color-fuchsia-600);
+    --color-brand-50: #eef6ff;
+    --color-brand-100: #d9ebff;
+    --color-brand-200: #bcdcff;
+    --color-brand-300: #8ec6ff;
+    --color-brand-400: #59a5ff;
+    --color-brand-500: #2f82ff;
+    --color-brand-600: #1e6bff;
+    --color-brand-700: #1757e6;
+    --color-brand-800: #1946ba;
+    --color-brand-900: #1b3f92;
+    --color-brand-950: #152858;
+    --color-brand-cyan: #22b5ff;
+    --color-brand-navy: #070b1a;
+
+    /*
+     * Las vistas usan `violet` como color de acento: se remapea a la marca para
+     * que todo el sistema tome la identidad sin reescribir cada vista.
+     */
+    --color-violet-50: var(--color-brand-50);
+    --color-violet-100: var(--color-brand-100);
+    --color-violet-200: var(--color-brand-200);
+    --color-violet-300: var(--color-brand-300);
+    --color-violet-400: var(--color-brand-400);
+    --color-violet-500: var(--color-brand-500);
+    --color-violet-600: var(--color-brand-600);
+    --color-violet-700: var(--color-brand-700);
+    --color-violet-800: var(--color-brand-800);
+    --color-violet-900: var(--color-brand-900);
+    --color-violet-950: var(--color-brand-950);
+}
+
+@theme {
+    --color-accent: var(--color-brand-600);
+    --color-accent-content: var(--color-brand-600);
     --color-accent-foreground: var(--color-white);
 }
 
 @layer theme {
     .dark {
-        --color-accent: var(--color-fuchsia-600);
-        --color-accent-content: var(--color-fuchsia-400);
+        --color-accent: var(--color-brand-500);
+        --color-accent-content: var(--color-brand-400);
         --color-accent-foreground: var(--color-white);
     }
 }

@@ -16,9 +16,15 @@
                         <h2 class="text-2xl font-semibold text-zinc-900 dark:text-white">{{ $rental->code }}</h2>
                         @include('livewire.rental.partials.status-badge', ['rental' => $rental])
                     </div>
-                    <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                        Registrado por {{ $rental->user?->name ?? '—' }} el {{ $rental->created_at?->format('d/m/Y H:i') }}
-                    </p>
+                    <div class="mt-1 flex flex-wrap items-center justify-between gap-2">
+                        <p class="text-sm text-zinc-500 dark:text-zinc-400">
+                            Registrado por {{ $rental->user?->name ?? '—' }} el {{ $rental->created_at?->format('d/m/Y H:i') }}
+                        </p>
+                        <flux:button size="sm" icon="document-text" wire:navigate
+                            :href="route('receipts.show', ['type' => 'alquiler', 'id' => $rental->id])">
+                            Comprobante
+                        </flux:button>
+                    </div>
                 </div>
 
                 @if ($rental->isCancelled())
@@ -81,6 +87,53 @@
                             </tr>
                         </tfoot>
                     </table>
+                </div>
+
+                <!-- Documento del cliente (fotos privadas, servidas con permiso) -->
+                <div x-data="{ adding: false }" class="rounded-2xl border border-zinc-200 p-4 dark:border-zinc-800">
+                    <div class="flex items-center justify-between gap-3">
+                        <p class="text-xs font-semibold uppercase tracking-wider text-zinc-400">Documento del cliente</p>
+                        @can('alquileres.registrar')
+                            <flux:button size="sm" variant="subtle" icon="camera" x-on:click="adding = ! adding">
+                                Agregar fotos
+                            </flux:button>
+                        @endcan
+                    </div>
+
+                    @if ($rental->documents->isEmpty())
+                        <p class="mt-3 text-sm text-amber-600 dark:text-amber-400">Este alquiler no tiene fotos del documento.</p>
+                    @else
+                        <div class="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
+                            @foreach ($rental->documents as $document)
+                                <div wire:key="rental-document-{{ $document->id }}" class="group relative overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-700">
+                                    <a href="{{ $document->url() }}" target="_blank" rel="noopener" class="block aspect-[4/3] bg-zinc-100 dark:bg-zinc-800">
+                                        <img src="{{ $document->url() }}" alt="{{ $document->label ?? 'Documento' }}" loading="lazy" class="size-full object-cover" />
+                                    </a>
+                                    <p class="truncate px-2 py-1 text-[11px] text-zinc-600 dark:text-zinc-300">{{ $document->label ?? 'Documento' }}</p>
+                                    @can('alquileres.editar')
+                                        <button type="button" wire:click="deleteDocument({{ $document->id }})"
+                                            wire:confirm="¿Eliminar esta foto del documento?"
+                                            class="absolute right-1 top-1 hidden size-7 place-items-center rounded-full bg-black/60 text-white group-hover:grid"
+                                            aria-label="Eliminar foto">
+                                            <flux:icon icon="trash" class="size-3.5" />
+                                        </button>
+                                    @endcan
+                                </div>
+                            @endforeach
+                        </div>
+                    @endif
+
+                    @can('alquileres.registrar')
+                        <div x-show="adding" x-collapse class="mt-4 space-y-3">
+                            @include('livewire.rental.partials.document-photos')
+                            <div class="flex justify-end">
+                                <flux:button size="sm" variant="primary" wire:click="saveDocuments" icon="check">
+                                    <span wire:loading.remove wire:target="saveDocuments">Guardar fotos</span>
+                                    <span wire:loading wire:target="saveDocuments">Guardando...</span>
+                                </flux:button>
+                            </div>
+                        </div>
+                    @endcan
                 </div>
 
                 @if ($rental->isCancelled())

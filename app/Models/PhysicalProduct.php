@@ -50,6 +50,11 @@ class PhysicalProduct extends Model
         'status_note',
         'sold_at',
         'disposed_at',
+        'reserved_client_id',
+        'reserved_until',
+        'reservation_note',
+        'reserved_by',
+        'reserved_at',
     ];
 
     protected $casts = [
@@ -59,6 +64,8 @@ class PhysicalProduct extends Model
         'rental_price' => 'decimal:2',
         'sold_at' => 'date',
         'disposed_at' => 'datetime',
+        'reserved_until' => 'date',
+        'reserved_at' => 'datetime',
     ];
 
     /**
@@ -126,6 +133,32 @@ class PhysicalProduct extends Model
     public function saleDetails(): HasMany
     {
         return $this->hasMany(SaleDetail::class);
+    }
+
+    public function reservedClient(): BelongsTo
+    {
+        return $this->belongsTo(Client::class, 'reserved_client_id')->withTrashed();
+    }
+
+    /**
+     * Está separada para un cliente (la marca no bloquea venderla ni alquilarla).
+     */
+    public function isReserved(): bool
+    {
+        return $this->reserved_client_id !== null;
+    }
+
+    /**
+     * La fecha de la separación ya pasó y nadie la liberó.
+     */
+    public function isReservationExpired(): bool
+    {
+        return $this->isReserved() && $this->reserved_until?->isBefore(today());
+    }
+
+    public function scopeReserved(Builder $query): Builder
+    {
+        return $query->whereNotNull('reserved_client_id');
     }
 
     public function maintenances(): HasMany

@@ -22,7 +22,9 @@ test('guests visiting the root are sent to the split login and users to the dash
 
     $this->get(route('login'))
         ->assertOk()
-        ->assertSee('Alquiler y venta de trajes');
+        ->assertSee('Bienvenido de nuevo')
+        ->assertSee('Iniciar sesión')
+        ->assertSee('brand/kipusoft-horizontal-dark.svg', false);
 
     $this->actingAs(createSeller())->get('/')->assertRedirect('/dashboard');
 });
@@ -39,7 +41,7 @@ test('sellers only reach sales, rentals, clients and the dashboard', function ()
     foreach ([
         'purchasing.purchases.index', 'purchasing.purchases.create', 'purchasing.suppliers.index',
         'inventory.products.index', 'inventory.categories.index', 'inventory.physical-items.index',
-        'maintenance.history.index', 'finance.expenses.index', 'finance.cash.index', 'core.users.index',
+        'maintenance.history.index', 'finance.expenses.index', 'core.users.index',
     ] as $route) {
         $this->get(route($route))->assertForbidden();
     }
@@ -58,17 +60,54 @@ test('admins reach every module without assigned permissions', function () {
 });
 
 test('the menu only lists what the user can open', function () {
-    $sellerMenu = app(NavigationMenu::class)->for(createSeller());
-    $labels = collect($sellerMenu)->pluck('label')->all();
-    $commercial = collect($sellerMenu)->firstWhere('label', 'Comercial');
+    $sellerMenu = collect(app(NavigationMenu::class)->for(createSeller()));
 
-    expect($labels)->toBe(['Dashboard', 'Comercial'])
-        ->and(collect($commercial['items'])->pluck('route')->all())
-        ->toBe(['sale.sales.create', 'sale.sales.index', 'rental.rentals.create', 'rental.rentals.index', 'core.clients.index']);
+    expect($sellerMenu->pluck('label')->all())->toBe(['Dashboard', 'Ventas', 'Alquileres', 'Directorio'])
+        ->and(collect($sellerMenu->firstWhere('label', 'Directorio')['items'])->pluck('route')->all())
+        ->toBe(['core.clients.index']);
 
     $adminLabels = collect(app(NavigationMenu::class)->for(createAdmin()))->pluck('label')->all();
 
-    expect($adminLabels)->toBe(['Dashboard', 'Comercial', 'Inventario', 'Compras', 'Administración']);
+    expect($adminLabels)->toBe(['Dashboard', 'Ventas', 'Alquileres', 'Inventario', 'Compras', 'Directorio', 'Finanzas', 'Administración']);
+});
+
+test('quick actions to sell and rent hide inside their own module', function (string $route, array $expected) {
+    $request = Request::create(route($route));
+    $request->setRouteResolver(fn () => app('router')->getRoutes()->match($request));
+    app()->instance('request', $request);
+
+    $actions = app(NavigationMenu::class)->quickActions(createSeller());
+
+    expect(array_column($actions, 'label'))->toBe($expected);
+})->with([
+    'dashboard' => ['dashboard', ['Vender', 'Alquilar']],
+    'nueva venta' => ['sale.sales.create', ['Alquilar']],
+    'historial de ventas' => ['sale.sales.index', ['Alquilar']],
+    'nuevo alquiler' => ['rental.rentals.create', ['Vender']],
+    'clientes' => ['core.clients.index', ['Vender', 'Alquilar']],
+]);
+
+test('the layout renders the sidebar with floating and inline quick actions', function () {
+    $this->actingAs(createSeller())
+        ->get(route('core.clients.index'))
+        ->assertOk()
+        ->assertSee('data-flux-sidebar', false)
+        ->assertSee('data-test="quick-actions-floating"', false)
+        ->assertSee('data-test="quick-actions-bar"', false)
+        ->assertSee(route('sale.sales.create'))
+        ->assertSee(route('rental.rentals.create'));
+});
+
+test('every sidebar section renders as an expandable group that also works collapsed', function () {
+    $html = $this->actingAs(createAdmin())->get(route('dashboard'))->assertOk()->getContent();
+
+    $sections = ['Ventas', 'Alquileres', 'Inventario', 'Compras', 'Directorio', 'Finanzas', 'Administración'];
+
+    // Una disclosure (sidebar expandido) y un dropdown (sidebar colapsado) por sección.
+    expect(preg_match_all('/<ui-disclosure[^>]*data-flux-sidebar-group[\s>]/', $html))->toBe(count($sections))
+        ->and(preg_match_all('/<ui-dropdown[^>]*data-flux-sidebar-group-dropdown/', $html))->toBe(count($sections));
+
+    $this->get(route('dashboard'))->assertSeeInOrder($sections);
 });
 
 test('sellers see sales read only and cannot edit or cancel them', function () {

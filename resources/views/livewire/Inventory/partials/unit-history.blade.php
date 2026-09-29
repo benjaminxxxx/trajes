@@ -38,6 +38,15 @@
             </div>
         </div>
 
+        @if ($unit->isReserved())
+            <flux:callout class="mt-4" :variant="$unit->isReservationExpired() ? 'secondary' : 'warning'" icon="bookmark"
+                heading="Separada para {{ $unit->reservedClient?->display_name }} hasta el {{ $unit->reserved_until?->format('d/m/Y') }}{{ $unit->isReservationExpired() ? ' (vencida)' : '' }}">
+                @if ($unit->reservation_note)
+                    <flux:callout.text>{{ $unit->reservation_note }}</flux:callout.text>
+                @endif
+            </flux:callout>
+        @endif
+
         <!-- KPIs -->
         <div class="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <div class="rounded-2xl bg-zinc-50 p-4 dark:bg-zinc-800/60">

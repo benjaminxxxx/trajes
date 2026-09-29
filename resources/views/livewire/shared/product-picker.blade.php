@@ -108,7 +108,16 @@
                                                         @endif
                                                     </span>
                                                 </td>
-                                                <td class="px-3 py-2 font-mono text-xs font-semibold text-zinc-800 dark:text-zinc-200">{{ $unit->code }}</td>
+                                                <td class="px-3 py-2">
+                                                    <span class="font-mono text-xs font-semibold text-zinc-800 dark:text-zinc-200">{{ $unit->code }}</span>
+                                                    @if ($unit->isReserved())
+                                                        {{-- Solo aviso: se puede elegir igual si el cliente llegó antes --}}
+                                                        <span class="mt-0.5 flex items-center gap-1 text-[11px] {{ $unit->isReservationExpired() ? 'text-zinc-400' : 'text-amber-600 dark:text-amber-400' }}">
+                                                            <flux:icon icon="bookmark" class="size-3" />
+                                                            Separada: {{ $unit->reservedClient?->display_name }} · {{ $unit->reserved_until?->format('d/m') }}{{ $unit->isReservationExpired() ? ' (vencida)' : '' }}
+                                                        </span>
+                                                    @endif
+                                                </td>
                                                 <td class="px-3 py-2 text-right tabular-nums text-zinc-600 dark:text-zinc-300">{{ $unit->rental_details_count }}</td>
                                                 <td class="px-3 py-2 text-right tabular-nums">S/ {{ number_format($unit->suggested_price, 2) }}</td>
                                             </tr>

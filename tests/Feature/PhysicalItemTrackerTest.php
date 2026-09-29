@@ -106,3 +106,19 @@ test('product stats are yearly and grouped by month, size and color', function (
         ->assertSee($variant->product->name)
         ->assertSee('Tallas que más se mueven');
 });
+
+test('the product list links each product to its tracking page', function () {
+    $variant = createProductIn(null);
+    $product = $variant->product;
+    $url = route('inventory.physical-items.index', ['producto' => $product->id]);
+
+    $this->get(route('inventory.products.index'))
+        ->assertOk()
+        ->assertSee($url, false);
+
+    Livewire::withQueryParams(['producto' => $product->id])
+        ->test(PhysicalItemTracker::class)
+        ->assertSet('productId', $product->id)
+        ->assertSee($product->name)
+        ->assertSee('Tallas que más se mueven');
+});

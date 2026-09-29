@@ -9,6 +9,7 @@ use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\Sale;
 use App\Models\SaleDetail;
+use App\Services\Rental\ReservationService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
@@ -52,7 +53,7 @@ class SaleService
                 'subtotal' => $subtotal,
                 'tax' => $tax,
                 'total' => $total,
-                'status' => 'completed',
+                'status' => Sale::STATUS_COMPLETED,
                 'notes' => $header['notes'] ?? null,
             ]);
 
@@ -213,6 +214,8 @@ class SaleService
                 'status' => 'sold',
                 'sold_at' => now(),
                 'final_sale_price' => $unitNet,
+                // Vendida: si estaba separada, la separación ya no aplica.
+                ...ReservationService::CLEARED,
             ]);
         }
 

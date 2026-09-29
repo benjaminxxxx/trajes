@@ -99,7 +99,9 @@ class ProductForm extends Component
     {
         return view('livewire.inventory.product-form', [
             'categoryOptions' => Category::where('is_active', true)->orderBy('name')->get(['id', 'name']),
-            'brandOptions' => Brand::orderBy('name')->get(['id', 'name']),
+            // Marcas activas, más la que el producto ya tiene aunque esté desactivada.
+            'brandOptions' => Brand::where(fn ($q) => $q->where('is_active', true)->orWhere('id', $this->brand_id))
+                ->orderBy('name')->get(['id', 'name']),
             'attributes' => Attribute::with('values')->orderBy('name')->get(),
         ]);
     }
