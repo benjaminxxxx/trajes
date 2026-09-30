@@ -15,14 +15,19 @@ use Illuminate\Support\Str;
 
 class ProductSeeder extends Seeder
 {
+    use RunsInAccount;
+
     public function run(): void
     {
+        $this->ensureAccount();
+
         $categories = Category::all();
         $colors = Color::all()->keyBy('name');
         $sizes = Size::all();
 
         if ($categories->isEmpty()) {
             $this->command->warn('No se encontraron categorías. Revisa CategorySeeder.');
+
             return;
         }
 
@@ -95,27 +100,30 @@ class ProductSeeder extends Seeder
                 $val = AttributeValue::where('attribute_id', $generoAttr->id)
                     ->where('value', $item['gender'])
                     ->first();
-                if ($val)
+                if ($val) {
                     $attributeValueIds[] = $val->id;
+                }
             }
 
             if ($materialAttr && isset($item['material'])) {
                 $val = AttributeValue::where('attribute_id', $materialAttr->id)
                     ->where('value', $item['material'])
                     ->first();
-                if ($val)
+                if ($val) {
                     $attributeValueIds[] = $val->id;
+                }
             }
 
             if ($corteAttr && isset($item['corte'])) {
                 $val = AttributeValue::where('attribute_id', $corteAttr->id)
                     ->where('value', $item['corte'])
                     ->first();
-                if ($val)
+                if ($val) {
                     $attributeValueIds[] = $val->id;
+                }
             }
 
-            if (!empty($attributeValueIds)) {
+            if (! empty($attributeValueIds)) {
                 // Pasa únicamente un array de IDs planos: [1, 5, 8]
                 $product->attributeValues()->sync($attributeValueIds);
             }

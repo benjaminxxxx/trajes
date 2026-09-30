@@ -1,18 +1,27 @@
 <?php
 
+use App\Http\Controllers\Auth\GoogleAuthController;
+use App\Http\Controllers\Billing\SunatDocumentPdfController;
 use App\Http\Controllers\Documents\ReceiptController;
 use App\Http\Controllers\Rental\RentalMediaController;
+use App\Livewire\Billing\BillingSettings;
+use App\Livewire\Billing\SunatDocumentIndex;
+use App\Livewire\Core\AccountPicker;
 use App\Livewire\Core\ClientIndex;
 use App\Livewire\Core\Dashboard;
+use App\Livewire\Core\SystemSettings;
 use App\Livewire\Core\UserIndex;
 use App\Livewire\Finance\ExpenseIndex;
+use App\Livewire\Inventory\AssetIndex;
 use App\Livewire\Inventory\AttributeCatalog;
 use App\Livewire\Inventory\CategoryIndex;
+use App\Livewire\Inventory\CompanyValuation;
 use App\Livewire\Inventory\PhysicalItemTracker;
 use App\Livewire\Inventory\ProductForm;
 use App\Livewire\Inventory\ProductIndex;
 use App\Livewire\Maintenance\LaundryIndex;
 use App\Livewire\Maintenance\MaintenanceHistory;
+use App\Livewire\Platform\AccountIndex as PlatformAccountIndex;
 use App\Livewire\Purchasing\PurchaseForm;
 use App\Livewire\Purchasing\PurchaseIndex;
 use App\Livewire\Purchasing\SupplierIndex;
@@ -28,7 +37,28 @@ use Illuminate\Support\Facades\Route;
 | al iniciar sesión, llega al dashboard. Cada ruta exige su permiso
 | (config/permissions.php); el rol admin pasa siempre por Gate::before.
 */
-Route::middleware(['auth', 'verified'])->group(function () {
+/*
+| Panel de la plataforma (Kipusoft): todos los negocios, su estado y su uso.
+| No depende de tener un negocio propio.
+*/
+Route::get('plataforma', PlatformAccountIndex::class)->name('platform.accounts.index')
+    ->middleware(['auth', 'verified', 'platform']);
+
+/*
+| Iniciar sesión o registrarse con Google.
+*/
+Route::middleware('guest')->group(function () {
+    Route::get('auth/google', [GoogleAuthController::class, 'redirect'])->name('auth.google');
+    Route::get('auth/google/callback', [GoogleAuthController::class, 'callback'])->name('auth.google.callback');
+});
+
+/*
+| Elegir o crear el negocio con el que se trabaja. Es lo único accesible sin
+| un negocio activo (ej. recién registrado, o retirado de su único negocio).
+*/
+Route::get('cuentas', AccountPicker::class)->name('accounts.select')->middleware(['auth', 'verified']);
+
+Route::middleware(['auth', 'verified', 'account'])->group(function () {
 
     Route::redirect('/', '/dashboard')->name('home');
     Route::get('dashboard', Dashboard::class)->name('dashboard');
@@ -48,6 +78,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
     Route::get('inventario/prendas-fisicas', PhysicalItemTracker::class)->name('inventory.physical-items.index')
         ->middleware('can:inventario.seguimiento');
+    Route::get('inventario/bienes', AssetIndex::class)->name('inventory.assets.index')
+        ->middleware('can:inventario.bienes');
+    Route::get('inventario/valorizado', CompanyValuation::class)->name('inventory.valuation.index')
+        ->middleware('can:inventario.valorizado');
 
     // ==========================================
     // 2. DOMINIO: ALQUILERES (Rental)
@@ -70,6 +104,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->whereIn('type', ['venta', 'alquiler'])->whereNumber('id');
     Route::get('comprobantes/{type}/{id}/pdf', [ReceiptController::class, 'file'])->name('receipts.file')
         ->whereIn('type', ['venta', 'alquiler'])->whereNumber('id');
+
+    // ==========================================
+    // 3.1 FACTURACIÓN ELECTRÓNICA (Billing) — vía el servicio central de facturación
+    // ==========================================
+    Route::get('facturacion/comprobantes', SunatDocumentIndex::class)->name('billing.documents.index')
+        ->middleware('can:facturacion.emitir');
+    Route::get('facturacion/comprobantes/{sunatDocument}/{format}', SunatDocumentPdfController::class)
+        ->name('billing.documents.pdf')->whereIn('format', ['a4', 'ticket'])->middleware('can:facturacion.emitir');
+    Route::get('facturacion/configuracion', BillingSettings::class)->name('billing.settings')
+        ->middleware('can:facturacion.configurar');
 
     // ==========================================
     // 4. DOMINIO: COMPRAS (Purchasing)
@@ -95,6 +139,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // ==========================================
     Route::get('clientes', ClientIndex::class)->name('core.clients.index')->middleware('can:clientes.ver');
     Route::get('seguridad/usuarios', UserIndex::class)->name('core.users.index')->middleware('can:seguridad.usuarios');
+    Route::get('configuracion', SystemSettings::class)->name('core.settings.index')->middleware('can:configuracion.general');
 
 });
 

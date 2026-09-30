@@ -4,6 +4,7 @@ namespace App\Livewire\Maintenance;
 
 use App\Models\ItemMaintenance;
 use App\Models\PhysicalProduct;
+use App\Services\Core\AccountRule;
 use App\Services\Maintenance\MaintenanceService;
 use Flux\Flux;
 use Illuminate\Contracts\View\View;
@@ -97,7 +98,7 @@ class MaintenanceFormModal extends Component
         $this->authorize('mantenimiento.registrar');
 
         $validated = $this->validate([
-            'unitId' => ['required', 'integer', 'exists:physical_products,id'],
+            'unitId' => ['required', 'integer', AccountRule::exists('physical_products')],
             'type' => ['required', Rule::in(array_keys(ItemMaintenance::TYPES))],
             'cost' => ['required', 'numeric', 'min:0'],
             'provider_name' => ['nullable', 'string', 'max:255'],

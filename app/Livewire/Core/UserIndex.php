@@ -2,7 +2,10 @@
 
 namespace App\Livewire\Core;
 
+use App\Models\AccountMember;
 use App\Models\User;
+use App\Services\Core\AccountService;
+use App\Services\Core\CurrentAccount;
 use Flux\Flux;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\On;
@@ -10,6 +13,9 @@ use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithPagination;
 
+/**
+ * Personas con acceso al negocio actual (y las que fueron retiradas).
+ */
 class UserIndex extends Component
 {
     use WithPagination;
@@ -59,23 +65,37 @@ class UserIndex extends Component
         $this->dispatch('open-user-modal', id: $id);
     }
 
-    public function restoreUser(int $id): void
+    /**
+     * Devuelve el acceso a alguien retirado (como vendedor).
+     */
+    public function restoreUser(int $id, AccountService $service): void
     {
         $this->authorize('seguridad.usuarios');
 
-        User::onlyTrashed()->findOrFail($id)->restore();
+        $account = app(CurrentAccount::class)->get();
+        $member = AccountMember::where('account_id', $account->id)->where('user_id', $id)->firstOrFail();
+        $user = User::withTrashed()->findOrFail($member->user_id);
 
-        Flux::toast(variant: 'success', text: 'Usuario restaurado correctamente.');
+        if ($user->trashed()) {
+            $user->restore();
+        }
+
+        $service->restore($account, $user);
+
+        Flux::toast(variant: 'success', text: "{$user->name} vuelve a tener acceso como vendedor.");
     }
 
     public function render(): View
     {
-        $query = $this->showArchived
-            ? User::onlyTrashed()
-            : User::query();
+        $account = app(CurrentAccount::class)->get();
+
+        $query = User::withTrashed()->whereIn('id', AccountMember::query()
+            ->where('account_id', $account?->id)
+            ->where('status', $this->showArchived ? AccountMember::STATUS_REVOKED : AccountMember::STATUS_ACTIVE)
+            ->select('user_id'));
 
         if (in_array($this->role, ['admin', 'vendedor'])) {
-            $query->role($this->role);
+            $query->whereHas('roles', fn ($roles) => $roles->where('name', $this->role));
         }
 
         if (! empty($this->search)) {
@@ -93,6 +113,7 @@ class UserIndex extends Component
 
         return view('livewire.core.user-index', [
             'users' => $users,
+            'ownerId' => $account?->owner_id,
         ]);
     }
 }

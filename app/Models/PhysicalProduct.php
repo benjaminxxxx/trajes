@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\DB;
 
 class PhysicalProduct extends Model
 {
-    use HasFactory, SoftDeletes;
+    use BelongsToAccount, HasFactory, SoftDeletes;
 
     protected $table = 'physical_products';
 

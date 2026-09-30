@@ -12,7 +12,6 @@ use App\Models\Color;
 use App\Models\Product;
 use App\Models\Sale;
 use App\Models\Size;
-use App\Models\User;
 use App\Services\Documents\ReceiptService;
 use App\Services\Rental\RentalService;
 use App\Services\Rental\ReservationService;
@@ -64,9 +63,9 @@ test('the pdf is generated, stored and served only with permission', function ()
 
     $response->assertOk()->assertHeader('Content-Type', 'application/pdf');
     expect(substr($response->streamedContent(), 0, 4))->toBe('%PDF');
-    Storage::disk('local')->assertExists("receipts/ventas/{$sale->code}.pdf");
+    Storage::disk('local')->assertExists("accounts/{$sale->account_id}/receipts/ventas/{$sale->code}.pdf");
 
-    $this->actingAs(User::factory()->create())
+    $this->actingAs(createMember())
         ->get(route('receipts.file', ['venta', $sale->id]))
         ->assertForbidden();
 });

@@ -5,6 +5,7 @@ namespace App\Livewire\Purchasing;
 use App\Models\Purchase;
 use App\Models\PurchaseDetail;
 use App\Models\Sale;
+use App\Services\Core\AccountRule;
 use App\Services\Purchasing\PurchaseService;
 use Flux\Flux;
 use Illuminate\Contracts\View\View;
@@ -120,7 +121,7 @@ class PurchaseDetailModal extends Component
         $this->authorize('compras.editar');
 
         $validated = $this->validate([
-            'supplier_id' => ['nullable', 'integer', 'exists:suppliers,id'],
+            'supplier_id' => ['nullable', 'integer', AccountRule::exists('suppliers')],
             'document_type' => ['required', Rule::in(array_keys(Sale::DOCUMENT_TYPES))],
             'document_number' => ['nullable', 'string', 'max:255'],
             'has_invoice_pending' => ['boolean'],

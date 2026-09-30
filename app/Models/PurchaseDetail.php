@@ -2,9 +2,6 @@
 
 namespace App\Models;
 
-use App\Models\InventoryMovement;
-use App\Models\PhysicalProduct;
-use App\Models\ProductVariant;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -13,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class PurchaseDetail extends Model
 {
-    use HasFactory;
+    use BelongsToAccount, HasFactory;
 
     protected $fillable = [
         'purchase_id',

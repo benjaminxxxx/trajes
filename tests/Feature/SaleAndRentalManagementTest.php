@@ -10,7 +10,7 @@ use App\Models\Category;
 use App\Models\InventoryMovement;
 use App\Models\Rental;
 use App\Models\Sale;
-use App\Models\User;
+use App\Services\Core\CurrentAccount;
 use App\Services\Inventory\CategoryReportService;
 use App\Services\Rental\RentalService;
 use App\Services\Sale\SaleService;
@@ -23,11 +23,9 @@ uses(RefreshDatabase::class);
 beforeEach(function () {
     $this->seed(RolesAndPermissionsSeeder::class);
 
-    $this->admin = User::factory()->create();
-    $this->admin->assignRole('admin');
+    $this->admin = createAdmin();
 
-    $this->seller = User::factory()->create();
-    $this->seller->assignRole('vendedor');
+    $this->seller = createSeller();
 
     $this->actingAs($this->admin);
 });
@@ -109,6 +107,58 @@ test('only admins can cancel a sale', function () {
         ->assertForbidden();
 
     expect($sale->fresh()->status)->toBe(Sale::STATUS_COMPLETED);
+});
+
+test('a client created from the sale detail is saved in that sale right away', function () {
+    $sale = registerSale();
+    $client = createClient();
+
+    // Con el detalle cerrado, un cliente creado en otra parte no se asigna.
+    Livewire::actingAs($this->admin)
+        ->test(SaleDetailModal::class)
+        ->dispatch('client-created', clientId: $client->id)
+        ->assertSet('client_id', null);
+
+    // Sin pulsar "Guardar": facturar justo después ya usa este cliente.
+    Livewire::actingAs($this->admin)
+        ->test(SaleDetailModal::class)
+        ->call('loadSale', $sale->id)
+        ->assertSee('Nuevo cliente')
+        ->dispatch('client-created', clientId: $client->id)
+        ->assertSet('client_id', $client->id)
+        ->assertSet('isOpen', true)
+        ->assertDispatched('saleUpdated');
+
+    expect($sale->fresh()->client_id)->toBe($client->id);
+});
+
+test('choosing or clearing the client in the sale detail saves it right away', function () {
+    $sale = registerSale();
+    $client = createClient();
+
+    $modal = Livewire::actingAs($this->admin)
+        ->test(SaleDetailModal::class)
+        ->call('loadSale', $sale->id)
+        ->dispatch('entity-selected', context: 'sale-edit-client', id: $client->id, label: $client->display_name);
+
+    expect($sale->fresh()->client_id)->toBe($client->id);
+
+    $modal->dispatch('entity-cleared', context: 'sale-edit-client');
+
+    expect($sale->fresh()->client_id)->toBeNull();
+});
+
+test('a client from another business cannot be assigned to a sale', function () {
+    $sale = registerSale();
+    $foreignClient = app(CurrentAccount::class)->runAs(createTestAccount(), fn () => createClient());
+
+    Livewire::actingAs($this->admin)
+        ->test(SaleDetailModal::class)
+        ->call('loadSale', $sale->id)
+        ->dispatch('entity-selected', context: 'sale-edit-client', id: $foreignClient->id, label: 'Ajeno')
+        ->assertHasErrors('client_id');
+
+    expect($sale->fresh()->client_id)->not->toBe($foreignClient->id);
 });
 
 test('editing a sale only changes non stock data', function () {

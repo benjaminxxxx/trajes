@@ -9,8 +9,12 @@ use Illuminate\Database\Seeder;
 
 class SaleSeeder extends Seeder
 {
+    use RunsInAccount;
+
     public function run(): void
     {
+        $this->ensureAccount();
+
         $saleService = app(SaleService::class);
         $user = User::first() ?? User::factory()->create();
 
@@ -19,6 +23,7 @@ class SaleSeeder extends Seeder
 
         if ($availableProducts->count() < 3) {
             $this->command->warn('Se necesitan al menos 3 prendas disponibles. Ejecuta PurchaseSeeder primero.');
+
             return;
         }
 
@@ -38,21 +43,21 @@ class SaleSeeder extends Seeder
             foreach ($selectedItems as $item) {
                 $items[] = [
                     'physical_product_id' => $item->id,
-                    'unit_price'          => rand(150, 450), // Precio de venta del traje/vestido
+                    'unit_price' => rand(150, 450), // Precio de venta del traje/vestido
                 ];
             }
 
             $hasInvoicePending = ($i === 2); // Simular que la venta 2 requiere factura posterior
 
             $saleData = [
-                'user_id'             => $user->id,
-                'document_type'       => $hasInvoicePending ? 'nota_venta' : 'boleta',
-                'document_number'     => $hasInvoicePending ? null : "B001-00000{$i}",
+                'user_id' => $user->id,
+                'document_type' => $hasInvoicePending ? 'nota_venta' : 'boleta',
+                'document_number' => $hasInvoicePending ? null : "B001-00000{$i}",
                 'has_invoice_pending' => $hasInvoicePending,
-                'sale_date'           => now()->subDays(rand(0, 5)),
-                'payment_method'      => $paymentMethods[array_rand($paymentMethods)],
-                'notes'               => "Venta de prueba N° {$i}",
-                'items'               => $items,
+                'sale_date' => now()->subDays(rand(0, 5)),
+                'payment_method' => $paymentMethods[array_rand($paymentMethods)],
+                'notes' => "Venta de prueba N° {$i}",
+                'items' => $items,
             ];
 
             $sale = $saleService->createSale($saleData);
@@ -63,9 +68,9 @@ class SaleSeeder extends Seeder
         }
 
         // 4. Probar la anulación llamando al servicio sobre la última venta realizada
-        if (!empty($createdSales)) {
+        if (! empty($createdSales)) {
             $lastSale = end($createdSales);
-            $saleService->cancelSale($lastSale, "Cliente desistió de la compra por insatisfacción con la talla.");
+            $saleService->cancelSale($lastSale, 'Cliente desistió de la compra por insatisfacción con la talla.');
         }
     }
 }

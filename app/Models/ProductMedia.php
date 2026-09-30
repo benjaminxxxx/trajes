@@ -7,6 +7,8 @@ use Illuminate\Support\Facades\Storage;
 
 class ProductMedia extends Model
 {
+    use BelongsToAccount;
+
     protected $fillable = [
         'product_id',
         'file_path',

@@ -31,6 +31,14 @@ return [
         ],
     ],
     [
+        'label' => 'Facturación',
+        'icon' => 'receipt-percent',
+        'items' => [
+            ['label' => 'Comprobantes electrónicos', 'icon' => 'document-check', 'route' => 'billing.documents.index', 'permission' => 'facturacion.emitir'],
+            ['label' => 'Configuración', 'icon' => 'link', 'route' => 'billing.settings', 'permission' => 'facturacion.configurar'],
+        ],
+    ],
+    [
         'label' => 'Alquileres',
         'icon' => 'sparkles',
         'items' => [
@@ -47,6 +55,8 @@ return [
             ['label' => 'Tallas, colores y marcas', 'icon' => 'swatch', 'route' => 'inventory.attributes.index', 'permission' => 'inventario.atributos'],
             ['label' => 'Seguimiento de prendas', 'icon' => 'qr-code', 'route' => 'inventory.physical-items.index', 'permission' => 'inventario.seguimiento'],
             ['label' => 'Mantenimientos', 'icon' => 'wrench-screwdriver', 'route' => 'maintenance.history.index', 'permission' => 'mantenimiento.ver'],
+            ['label' => 'Bienes del negocio', 'icon' => 'cube', 'route' => 'inventory.assets.index', 'permission' => 'inventario.bienes'],
+            ['label' => 'Valorizado', 'icon' => 'scale', 'route' => 'inventory.valuation.index', 'permission' => 'inventario.valorizado'],
         ],
     ],
     [
@@ -77,6 +87,7 @@ return [
         'icon' => 'cog-6-tooth',
         'items' => [
             ['label' => 'Usuarios', 'icon' => 'user-group', 'route' => 'core.users.index', 'permission' => 'seguridad.usuarios'],
+            ['label' => 'Configuración', 'icon' => 'adjustments-horizontal', 'route' => 'core.settings.index', 'permission' => 'configuracion.general'],
         ],
     ],
 ];

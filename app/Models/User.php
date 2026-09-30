@@ -2,11 +2,13 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Database\Factories\UserFactory;
+use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -32,13 +34,21 @@ use Spatie\Permission\Traits\HasRoles;
  * @property Carbon|null $updated_at
  */
 #[Fillable(['name', 'email', 'password'])]
-#[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
-class User extends Authenticatable implements PasskeyUser
+#[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token', 'google_id'])]
+/**
+ * Debe verificar su correo quien se registra con el formulario. Quien entra
+ * con Google o es invitado por un negocio ya queda verificado.
+ */
+class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory, HasRoles, Notifiable, PasskeyAuthenticatable, SoftDeletes, TwoFactorAuthenticatable;
 
+    /**
+     * current_account_id e is_platform_admin no son asignables en masa.
+     */
     protected $fillable = [
+        'name',
         'email',
         'password',
         'person_id',
@@ -56,7 +66,42 @@ class User extends Authenticatable implements PasskeyUser
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_active' => 'boolean',
+            'is_platform_admin' => 'boolean',
         ];
+    }
+
+    /**
+     * Administrador de la plataforma si su correo está en PLATFORM_ADMIN_EMAILS
+     * (config accounts.platform_admins). Se llama en cada inicio de sesión.
+     */
+    public function syncPlatformAdmin(): void
+    {
+        $isPlatformAdmin = in_array(strtolower($this->email), config('accounts.platform_admins'), true);
+
+        if ($this->is_platform_admin !== $isPlatformAdmin) {
+            $this->forceFill(['is_platform_admin' => $isPlatformAdmin])->save();
+        }
+    }
+
+    /**
+     * Negocios de los que la persona es o fue miembro.
+     */
+    public function accounts(): BelongsToMany
+    {
+        return $this->belongsToMany(Account::class)
+            ->using(AccountMember::class)
+            ->withPivot(['id', 'status', 'revoked_at', 'revoked_by'])
+            ->withTimestamps();
+    }
+
+    public function memberships(): HasMany
+    {
+        return $this->hasMany(AccountMember::class);
+    }
+
+    public function currentAccount(): BelongsTo
+    {
+        return $this->belongsTo(Account::class, 'current_account_id');
     }
 
     public function rentals(): HasMany

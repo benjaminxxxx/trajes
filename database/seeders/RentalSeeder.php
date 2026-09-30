@@ -9,11 +9,13 @@ use Illuminate\Database\Seeder;
 
 class RentalSeeder extends Seeder
 {
+    use RunsInAccount;
+
     public function run(): void
     {
+        $this->ensureAccount();
+
         $rentalService = app(RentalService::class);
-
-
 
         $user = User::first() ?? User::factory()->create();
 
@@ -22,6 +24,7 @@ class RentalSeeder extends Seeder
 
         if ($availableProducts->count() < 3) {
             $this->command->warn('Debes tener al menos 3 productos físicos disponibles (ejecuta PurchaseSeeder primero).');
+
             return;
         }
 
@@ -65,7 +68,7 @@ class RentalSeeder extends Seeder
                 'items' => $items,
                 'media' => [
                     [
-                        'file_path' => "rentals/dni_client_1.jpg",
+                        'file_path' => 'rentals/dni_client_1.jpg',
                         'type' => 'dni',
                     ],
                 ],

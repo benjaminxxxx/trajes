@@ -9,6 +9,8 @@ use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\Sale;
 use App\Models\SaleDetail;
+use App\Services\Assets\AssetService;
+use App\Services\Billing\BillingService;
 use App\Services\Rental\ReservationService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -35,9 +37,12 @@ class SaleService
 {
     public const TAX_RATE = 0.18;
 
-    public function register(array $header, array $lines): Sale
+    /**
+     * @param  array<int, int>  $deliveries  consumibles entregados: asset_id => cantidad
+     */
+    public function register(array $header, array $lines, array $deliveries = []): Sale
     {
-        return DB::transaction(function () use ($header, $lines) {
+        return DB::transaction(function () use ($header, $lines, $deliveries) {
             $total = round(array_sum(array_map(fn (array $line) => $this->lineGross($line), $lines)), 2);
             $subtotal = round($total / (1 + self::TAX_RATE), 2);
             $tax = round($total - $subtotal, 2);
@@ -60,6 +65,8 @@ class SaleService
             foreach ($lines as $line) {
                 $this->registerLine($sale, $line);
             }
+
+            app(AssetService::class)->deliverForSale($sale, $deliveries);
 
             CashMovement::create([
                 'user_id' => Auth::id(),
@@ -117,6 +124,8 @@ class SaleService
                 ]);
             }
 
+            app(AssetService::class)->returnForSale($sale);
+
             CashMovement::create([
                 'user_id' => Auth::id(),
                 'type' => CashMovement::TYPE_EXPENSE,
@@ -134,6 +143,10 @@ class SaleService
                 'cancelled_by' => Auth::id(),
                 'cancellation_reason' => $reason,
             ]);
+
+            // Aún no se emiten notas de crédito: si ya había factura/boleta en SUNAT, queda marcada
+            // como pendiente de nota de crédito para que el negocio la emita.
+            app(BillingService::class)->flagCreditNote($sale);
 
             return $sale;
         });
@@ -228,6 +241,8 @@ class SaleService
             'unit_cost' => $unitCost,
             'unit_price' => $unitNet,
             'subtotal' => $lineNet,
+            // Monto cobrado con IGV: el comprobante electrónico lo usa tal cual (ver BillingService::lines).
+            'line_total' => $lineGross,
         ]);
 
         InventoryMovement::create([

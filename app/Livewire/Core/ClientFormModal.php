@@ -3,6 +3,7 @@
 namespace App\Livewire\Core;
 
 use App\Models\Client;
+use App\Services\Core\AccountRule;
 use Flux\Flux;
 use Livewire\Component;
 use Str;
@@ -80,7 +81,7 @@ class ClientFormModal extends Component
         $rules = [
             'type' => 'required|in:individual,company',
             'document_type' => 'required|string',
-            'document_number' => 'required|string|unique:clients,document_number,'.$this->editingId,
+            'document_number' => ['required', 'string', AccountRule::unique('clients', 'document_number')->ignore($this->editingId)],
         ];
 
         if ($this->type === 'individual') {

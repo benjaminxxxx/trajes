@@ -62,6 +62,7 @@
                     <th class="px-4 py-3 text-right font-semibold">Unid.</th>
                     <th class="px-4 py-3 text-right font-semibold">Total</th>
                     <th class="px-4 py-3 text-left font-semibold">Estado</th>
+                    <th class="px-4 py-3"></th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
@@ -93,16 +94,45 @@
                                     <flux:badge size="sm" color="red">Anulada</flux:badge>
                                 @else
                                     <flux:badge size="sm" color="emerald">Completada</flux:badge>
-                                    @if ($sale->has_invoice_pending)
+                                    @if ($sale->has_invoice_pending && ! $sale->liveSunatDocument)
                                         <flux:badge size="sm" color="amber">Por facturar</flux:badge>
                                     @endif
                                 @endif
+                                @if ($doc = $sale->liveSunatDocument)
+                                    <flux:badge size="sm" :color="$doc->statusColor()" title="{{ $doc->sunat_description }}">
+                                        {{ $doc->fullNumber() }} · {{ $doc->statusLabel() }}
+                                    </flux:badge>
+                                    @if ($doc->credit_note_required)
+                                        <flux:badge size="sm" color="orange">Emitir nota de crédito</flux:badge>
+                                    @endif
+                                @elseif ($test = $sale->latestTestSunatDocument)
+                                    <flux:badge size="sm" color="zinc" title="Modo prueba: sin valor tributario">
+                                        Prueba {{ $test->fullNumber() }} · {{ $test->statusLabel() }}
+                                    </flux:badge>
+                                @endif
                             </div>
+                        </td>
+                        <td class="px-4 py-3 text-right">
+                            @if ($billingEnabled && ! $sale->isCancelled())
+                                @can('facturacion.emitir')
+                                    @if (! $sale->liveSunatDocument)
+                                        <flux:button size="sm" icon="document-check" data-test="facturar-{{ $sale->id }}"
+                                            wire:click.stop="$dispatch('open-invoice-sale', { id: {{ $sale->id }} })">
+                                            Facturar
+                                        </flux:button>
+                                    @elseif ($sale->liveSunatDocument->isAwaiting())
+                                        <flux:button size="sm" icon="arrow-path"
+                                            wire:click.stop="$dispatch('open-invoice-sale', { id: {{ $sale->id }} })">
+                                            Ver estado
+                                        </flux:button>
+                                    @endif
+                                @endcan
+                            @endif
                         </td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="8" class="px-4 py-12 text-center text-zinc-500">
+                        <td colspan="9" class="px-4 py-12 text-center text-zinc-500">
                             No se encontraron ventas con los filtros seleccionados.
                         </td>
                     </tr>
@@ -116,5 +146,8 @@
     </div>
 
     <livewire:sale.sale-detail-modal />
+    {{-- Botón "+" del cliente en el detalle de la venta (ej. para facturar a una empresa nueva). --}}
+    <livewire:core.client-form-modal key="sale-detail-client-form" />
+    <livewire:billing.invoice-sale-modal />
     <livewire:shared.category-year-summary type="sales" />
 </div>

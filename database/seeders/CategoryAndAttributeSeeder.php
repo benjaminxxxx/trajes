@@ -13,8 +13,12 @@ use Illuminate\Support\Str;
 
 class CategoryAndAttributeSeeder extends Seeder
 {
+    use RunsInAccount;
+
     public function run(): void
     {
+        $this->ensureAccount();
+
         // ----------------------------------------------------
         // 1. REGISTRO DE TALLAS POR GRUPOS
         // ----------------------------------------------------
@@ -69,33 +73,33 @@ class CategoryAndAttributeSeeder extends Seeder
 
         $sizes = [];
         foreach ($sizeData as $data) {
-            $sizes[$data['name'] . '_' . $data['type']] = Size::create($data);
+            $sizes[$data['name'].'_'.$data['type']] = Size::create($data);
         }
 
         // Helper para mapear IDs de tallas rápido
         $getSizes = function (array $keys) use ($sizes) {
-            return collect($keys)->map(fn($key) => $sizes[$key]->id)->toArray();
+            return collect($keys)->map(fn ($key) => $sizes[$key]->id)->toArray();
         };
 
         // ----------------------------------------------------
         // 2. REGISTRO DE COLORES
         // ----------------------------------------------------
         $colorData = [
-            'negro'     => ['name' => 'Negro', 'hex_code' => '#000000'],
+            'negro' => ['name' => 'Negro', 'hex_code' => '#000000'],
             'azul_noche' => ['name' => 'Azul Noche', 'hex_code' => '#000080'],
             'azul_marino' => ['name' => 'Azul Marino', 'hex_code' => '#1B263B'],
             'gris_oscuro' => ['name' => 'Gris Oscuro', 'hex_code' => '#3B3B3B'],
-            'gris_claro'  => ['name' => 'Gris Claro', 'hex_code' => '#D3D3D3'],
-            'blanco'    => ['name' => 'Blanco', 'hex_code' => '#FFFFFF'],
-            'marfil'    => ['name' => 'Marfil / Blanco Humo', 'hex_code' => '#F5F5DC'],
-            'vino'      => ['name' => 'Vino / Guinda', 'hex_code' => '#800020'],
-            'rojo'      => ['name' => 'Rojo', 'hex_code' => '#FF0000'],
+            'gris_claro' => ['name' => 'Gris Claro', 'hex_code' => '#D3D3D3'],
+            'blanco' => ['name' => 'Blanco', 'hex_code' => '#FFFFFF'],
+            'marfil' => ['name' => 'Marfil / Blanco Humo', 'hex_code' => '#F5F5DC'],
+            'vino' => ['name' => 'Vino / Guinda', 'hex_code' => '#800020'],
+            'rojo' => ['name' => 'Rojo', 'hex_code' => '#FF0000'],
             'rosa_palo' => ['name' => 'Rosa Palo', 'hex_code' => '#FFD1DC'],
             'esmeralda' => ['name' => 'Verde Esmeralda', 'hex_code' => '#008055'],
-            'dorado'    => ['name' => 'Dorado', 'hex_code' => '#FFD700'],
-            'plateado'  => ['name' => 'Plateado', 'hex_code' => '#C0C0C0'],
-            'beige'     => ['name' => 'Beige / Champán', 'hex_code' => '#F7E7CE'],
-            'marrón'    => ['name' => 'Marrón / Suela', 'hex_code' => '#6E2C00'],
+            'dorado' => ['name' => 'Dorado', 'hex_code' => '#FFD700'],
+            'plateado' => ['name' => 'Plateado', 'hex_code' => '#C0C0C0'],
+            'beige' => ['name' => 'Beige / Champán', 'hex_code' => '#F7E7CE'],
+            'marrón' => ['name' => 'Marrón / Suela', 'hex_code' => '#6E2C00'],
         ];
 
         $colors = [];
@@ -104,7 +108,7 @@ class CategoryAndAttributeSeeder extends Seeder
         }
 
         $getColors = function (array $keys) use ($colors) {
-            return collect($keys)->map(fn($key) => $colors[$key]->id)->toArray();
+            return collect($keys)->map(fn ($key) => $colors[$key]->id)->toArray();
         };
 
         // ----------------------------------------------------

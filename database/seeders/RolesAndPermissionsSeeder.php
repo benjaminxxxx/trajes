@@ -27,11 +27,12 @@ class RolesAndPermissionsSeeder extends Seeder
         // 'vender', 'alquilar'...) se eliminan para no dejar basura asignable.
         Permission::where('guard_name', 'web')->whereNotIn('name', $permissions)->delete();
 
+        // Roles globales (account_id null): lo que es por negocio es su asignación.
         // admin: sin permisos asignados, el acceso total lo da Gate::before.
-        Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
+        Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web', 'account_id' => null]);
 
         foreach (config('permissions.roles') as $roleName => $rolePermissions) {
-            Role::firstOrCreate(['name' => $roleName, 'guard_name' => 'web'])
+            Role::firstOrCreate(['name' => $roleName, 'guard_name' => 'web', 'account_id' => null])
                 ->syncPermissions($rolePermissions);
         }
 

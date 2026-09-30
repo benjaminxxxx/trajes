@@ -35,7 +35,8 @@ class ReceiptService
     public function path(Sale|Rental $operation): string
     {
         [, $folder] = self::TYPES[$this->type($operation)];
-        $path = "{$folder}/{$operation->code}.pdf";
+        // Los códigos se repiten entre negocios: cada negocio tiene su carpeta.
+        $path = "accounts/{$operation->account_id}/{$folder}/{$operation->code}.pdf";
         $disk = Storage::disk(self::DISK);
 
         $isStale = ! $disk->exists($path)
@@ -54,7 +55,7 @@ class ReceiptService
 
         return Pdf::loadView('pdf.receipt', [
             ...$data,
-            'business' => config('business'),
+            'business' => $this->business($operation),
             'logo' => public_path('brand/kipusoft-alquiler-horizontal.png'),
         ])
             ->setPaper('a5')
@@ -94,7 +95,18 @@ class ReceiptService
         $title = mb_strtolower(self::TYPES[$this->type($operation)][2]);
         $greeting = $client ? "Hola {$client->display_name}" : 'Hola';
 
-        return "{$greeting}, te enviamos tu {$title} {$operation->code} de ".config('business.name').": {$this->publicUrl($operation)}";
+        return "{$greeting}, te enviamos tu {$title} {$operation->code} de {$this->business($operation)['name']}: {$this->publicUrl($operation)}";
+    }
+
+    /**
+     * Datos del negocio que emitió la operación (no del que esté activo: el
+     * enlace público se abre sin sesión).
+     *
+     * @return array{name: string, ruc: ?string, address: ?string, phone: ?string, receipt_footer: ?string}
+     */
+    public function business(Sale|Rental $operation): array
+    {
+        return $operation->account?->receiptData() ?? config('business');
     }
 
     /**

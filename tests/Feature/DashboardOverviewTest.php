@@ -2,7 +2,6 @@
 
 use App\Livewire\Core\Dashboard;
 use App\Models\OperationalExpense;
-use App\Models\User;
 use App\Services\Core\DashboardService;
 use Carbon\CarbonImmutable;
 use Database\Seeders\RolesAndPermissionsSeeder;
@@ -14,8 +13,7 @@ uses(RefreshDatabase::class);
 beforeEach(function () {
     $this->seed(RolesAndPermissionsSeeder::class);
 
-    $this->admin = User::factory()->create();
-    $this->admin->assignRole('admin');
+    $this->admin = createAdmin();
     $this->actingAs($this->admin);
 });
 

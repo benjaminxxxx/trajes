@@ -6,8 +6,8 @@ use App\Models\Attribute;
 use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Product;
+use App\Services\Core\AccountRule;
 use App\Services\Inventory\ProductService;
-use Illuminate\Validation\Rule;
 use Livewire\Component;
 use Str;
 
@@ -16,19 +16,29 @@ class ProductForm extends Component
     public ?int $productId = null;
 
     public ?int $category_id = null;
+
     public ?int $brand_id = null;
+
     public string $code = '';
+
     public string $name = '';
+
     public ?string $description = null;
+
     public float $price = 0;
+
     public string $gender = 'unisex';
+
     public bool $allow_sale = true;
+
     public bool $allow_rental = true;
+
     public bool $is_active = true;
 
     public array $selectedAttributeValueIds = [];
 
     public bool $isEditing = false;
+
     public bool $hasPhysicalItems = false;
 
     public function mount(?Product $product = null): void
@@ -53,16 +63,16 @@ class ProductForm extends Component
             $this->selectedAttributeValueIds = $product->attributeValues->pluck('id')->toArray();
             $this->hasPhysicalItems = $product->physicalProducts()->exists();
         } else {
-            $this->code = 'PROD-' . strtoupper(Str::random(6));
+            $this->code = 'PROD-'.strtoupper(Str::random(6));
         }
     }
 
     protected function rules(): array
     {
         return [
-            'category_id' => 'required|exists:categories,id',
-            'brand_id' => 'nullable|exists:brands,id',
-            'code' => ['required', 'string', 'max:50', Rule::unique('products', 'code')->ignore($this->productId)],
+            'category_id' => ['required', AccountRule::exists('categories')],
+            'brand_id' => ['nullable', AccountRule::exists('brands')],
+            'code' => ['required', 'string', 'max:50', AccountRule::unique('products', 'code')->ignore($this->productId)],
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
             'price' => 'required|numeric|min:0',
@@ -71,13 +81,13 @@ class ProductForm extends Component
             'allow_rental' => 'boolean',
             'is_active' => 'boolean',
             'selectedAttributeValueIds' => 'array',
-            'selectedAttributeValueIds.*' => 'exists:attribute_values,id',
+            'selectedAttributeValueIds.*' => [AccountRule::exists('attribute_values')],
         ];
     }
 
     public function save(ProductService $service)
     {
-        
+
         $data = $this->validate();
 
         $data['attribute_value_ids'] = $this->selectedAttributeValueIds;

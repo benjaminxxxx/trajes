@@ -9,7 +9,6 @@ use App\Models\PhysicalProduct;
 use App\Models\Product;
 use App\Models\Purchase;
 use App\Models\Rental;
-use App\Models\User;
 use App\Services\Inventory\ItemTrackingService;
 use App\Services\Purchasing\PurchaseService;
 use App\Services\Rental\RentalService;
@@ -23,8 +22,7 @@ uses(RefreshDatabase::class);
 beforeEach(function () {
     $this->seed(RolesAndPermissionsSeeder::class);
 
-    $this->seller = User::factory()->create();
-    $this->seller->assignRole('vendedor');
+    $this->seller = createSeller();
     $this->actingAs($this->seller);
 });
 

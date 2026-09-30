@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class AttributeValue extends Model
 {
-    use HasFactory;
+    use BelongsToAccount, HasFactory;
 
     protected $fillable = [
         'attribute_id',

@@ -27,6 +27,8 @@ use Illuminate\Support\Str;
  */
 class ProductCatalogSeeder extends Seeder
 {
+    use RunsInAccount;
+
     /**
      * Categoría => tipo de talla que usa (sizes.type).
      */
@@ -43,6 +45,8 @@ class ProductCatalogSeeder extends Seeder
 
     public function run(ProductImageOptimizer $optimizer, PurchaseService $purchases): void
     {
+        $this->ensureAccount();
+
         if (Category::where('name', 'Ternos y Esmóquines')->doesntExist()) {
             $this->command?->warn('Ejecuta primero CategoryAndAttributeSeeder.');
 
@@ -196,7 +200,7 @@ class ProductCatalogSeeder extends Seeder
 
             ProductMedia::create([
                 'product_id' => $product->id,
-                'file_path' => $optimizer->storeFromPath($source, "products/{$product->id}", $filename),
+                'file_path' => $optimizer->storeFromPath($source, "accounts/{$product->account_id}/products/{$product->id}", $filename),
                 'file_type' => 'image',
                 'sort_order' => $index + 1,
                 'is_primary' => $index === 0,

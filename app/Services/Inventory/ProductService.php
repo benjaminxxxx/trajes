@@ -18,7 +18,7 @@ class ProductService
     public function agregarMedia(Product $product, UploadedFile $file, ?int $colorId = null, bool $isPrimary = false): ProductMedia
     {
         return DB::transaction(function () use ($product, $file, $colorId, $isPrimary) {
-            $path = $file->store('products/' . $product->id, 'public');
+            $path = $file->store("accounts/{$product->account_id}/products/{$product->id}", 'public');
             $fileType = str_starts_with($file->getMimeType(), 'video/') ? 'video' : 'image';
 
             if ($isPrimary) {
@@ -41,6 +41,7 @@ class ProductService
             ]);
         });
     }
+
     /**
      * Marcar una foto/video específico como portada principal.
      */
@@ -51,6 +52,7 @@ class ProductService
             $product->media()->where('id', $mediaId)->update(['is_primary' => true]);
         });
     }
+
     /**
      * Eliminar medio del storage y de la base de datos.
      */
@@ -74,29 +76,31 @@ class ProductService
             }
         });
     }
+
     /**
      * Crear un nuevo producto con sus atributos de ficha técnica.
      */
     public function crear(array $data): Product
     {
-        
+
         $this->validarUnicidadCombinacion($data);
-        
+
         return DB::transaction(function () use ($data) {
-            $data['slug'] = Str::slug($data['name'] . '-' . Str::random(5));
+            $data['slug'] = Str::slug($data['name'].'-'.Str::random(5));
 
             $attributeValueIds = $data['attribute_value_ids'] ?? [];
             unset($data['attribute_value_ids']);
 
             $product = Product::create($data);
 
-            if (!empty($attributeValueIds)) {
+            if (! empty($attributeValueIds)) {
                 $product->attributeValues()->sync($attributeValueIds);
             }
 
             return $product;
         });
     }
+
     /**
      * Actualizar un producto existente.
      */
@@ -111,7 +115,7 @@ class ProductService
             }
 
             if (isset($data['name']) && $data['name'] !== $product->name) {
-                $data['slug'] = Str::slug($data['name'] . '-' . Str::random(5));
+                $data['slug'] = Str::slug($data['name'].'-'.Str::random(5));
             }
 
             $attributeValueIds = $data['attribute_value_ids'] ?? null;
@@ -147,15 +151,16 @@ class ProductService
         if ($existing) {
             if ($existing->trashed()) {
                 throw ValidationException::withMessages([
-                    'name' => "Este producto ya existe pero se encuentra en ELIMINADOS. Puedes ir a la lista de 'Ver eliminados' y restaurarlo."
+                    'name' => "Este producto ya existe pero se encuentra en ELIMINADOS. Puedes ir a la lista de 'Ver eliminados' y restaurarlo.",
                 ]);
             }
 
             throw ValidationException::withMessages([
-                'name' => "Ya existe un producto con la misma Categoría, Género, Marca y Nombre."
+                'name' => 'Ya existe un producto con la misma Categoría, Género, Marca y Nombre.',
             ]);
         }
     }
+
     /**
      * Guardar o actualizar un producto validando combinaciones únicas.
      */
@@ -177,12 +182,12 @@ class ProductService
         if ($existingProduct) {
             if ($existingProduct->trashed()) {
                 throw ValidationException::withMessages([
-                    'name' => "Este producto ya existe pero se encuentra ELIMINADO. Puedes buscarlo en 'Ver eliminados' y restaurarlo."
+                    'name' => "Este producto ya existe pero se encuentra ELIMINADO. Puedes buscarlo en 'Ver eliminados' y restaurarlo.",
                 ]);
             }
 
             throw ValidationException::withMessages([
-                'name' => "Ya existe un producto registrado con la misma Categoría, Género, Marca y Nombre."
+                'name' => 'Ya existe un producto registrado con la misma Categoría, Género, Marca y Nombre.',
             ]);
         }
 
@@ -196,6 +201,7 @@ class ProductService
             }
 
             $product->update($data);
+
             return $product;
         }
 

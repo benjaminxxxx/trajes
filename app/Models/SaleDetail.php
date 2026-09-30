@@ -2,15 +2,13 @@
 
 namespace App\Models;
 
-use App\Models\PhysicalProduct;
-use App\Models\ProductVariant;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class SaleDetail extends Model
 {
-    use HasFactory;
+    use BelongsToAccount, HasFactory;
 
     protected $fillable = [
         'sale_id',
@@ -20,12 +18,15 @@ class SaleDetail extends Model
         'unit_cost',
         'unit_price',
         'subtotal',
+        'line_total',
     ];
 
     protected $casts = [
         'unit_cost' => 'decimal:2',
         'unit_price' => 'decimal:2',
         'subtotal' => 'decimal:2',
+        // Con IGV, tal como se cobró. null en ventas anteriores a su creación.
+        'line_total' => 'decimal:2',
     ];
 
     public function sale(): BelongsTo

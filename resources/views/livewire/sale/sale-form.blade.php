@@ -155,13 +155,43 @@
                     <flux:select.option value="factura">Factura</flux:select.option>
                 </flux:select>
 
-                <flux:input wire:model="document_number" label="N.º de comprobante" placeholder="F001-0000123" />
+                @if ($this->billingEnabled())
+                    <p class="-mt-2 text-[11px] text-zinc-500">
+                        Boleta y factura se emiten electrónicamente desde <strong>Ventas → Facturar</strong>, con la venta ya registrada.
+                    </p>
+                @else
+                    <flux:input wire:model="document_number" label="N.º de comprobante" placeholder="F001-0000123" />
+                @endif
                 <flux:input wire:model="sale_date" type="date" label="Fecha de venta" />
 
                 <label class="flex cursor-pointer items-center gap-3 rounded-xl border border-violet-100 bg-violet-50/70 p-3 dark:border-violet-900/50 dark:bg-violet-950/20">
                     <flux:checkbox wire:model="has_invoice_pending" />
                     <span class="text-sm font-medium text-zinc-800 dark:text-zinc-200">Por facturar</span>
                 </label>
+
+                @php($deliverableAssets = $this->deliverableAssets())
+                @if ($deliverableAssets->isNotEmpty())
+                    <div class="rounded-xl border border-zinc-200 p-3 dark:border-zinc-700" data-test="sale-deliveries">
+                        <p class="text-sm font-medium text-zinc-800 dark:text-zinc-200">Entregables</p>
+                        <div class="mt-2 flex flex-col gap-2">
+                            @foreach ($deliverableAssets as $asset)
+                                <div class="flex items-center gap-3" wire:key="delivery-{{ $asset->id }}">
+                                    <label class="flex min-w-0 flex-1 cursor-pointer items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+                                        <flux:checkbox wire:model.live="deliveries.{{ $asset->id }}.enabled" />
+                                        <span>¿Se entrega con {{ $asset->name }}?
+                                            <span class="block text-[11px] text-zinc-500">Quedan {{ $asset->quantity }}</span>
+                                        </span>
+                                    </label>
+                                    @if (! empty($deliveries[$asset->id]['enabled']))
+                                        <flux:input type="number" min="1" max="{{ $asset->quantity }}" size="sm" class="!w-20"
+                                            wire:model="deliveries.{{ $asset->id }}.quantity" placeholder="{{ $asset->suggested_quantity }}"
+                                            aria-label="Cantidad de {{ $asset->name }}" />
+                                    @endif
+                                </div>
+                            @endforeach
+                        </div>
+                    </div>
+                @endif
 
                 <flux:textarea wire:model="notes" label="Notas" rows="2" />
             </div>

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Documents;
 use App\Http\Controllers\Controller;
 use App\Models\Rental;
 use App\Models\Sale;
+use App\Services\Core\CurrentAccount;
 use App\Services\Documents\ReceiptService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
@@ -51,9 +52,16 @@ class ReceiptController extends Controller
     /**
      * Enlace público (firmado y con vencimiento) que recibe el cliente.
      */
-    public function public(string $type, int $id): Response
+    public function public(string $type, int $id, CurrentAccount $currentAccount): Response
     {
-        return $this->pdfResponse($this->resolve($type, $id, authorize: false));
+        abort_unless(isset(ReceiptService::TYPES[$type]), 404);
+
+        // La firma del enlace ya identifica la operación: se abre en el negocio
+        // que la emitió, aunque quien la abra tenga sesión en otro negocio.
+        [$model] = ReceiptService::TYPES[$type];
+        $operation = $model::withoutAccountScope()->with('account')->findOrFail($id);
+
+        return $currentAccount->runAs($operation->account, fn () => $this->pdfResponse($operation));
     }
 
     protected function resolve(string $type, int $id, bool $authorize): Sale|Rental

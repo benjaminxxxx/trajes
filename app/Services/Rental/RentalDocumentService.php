@@ -34,7 +34,7 @@ class RentalDocumentService
 
         try {
             foreach ($photos as $photo) {
-                $path = sprintf('rentals/%d/%s-%s.jpg', $rental->id, $type, Str::lower(Str::random(12)));
+                $path = sprintf('accounts/%d/rentals/%d/%s-%s.jpg', $rental->account_id, $rental->id, $type, Str::lower(Str::random(12)));
 
                 Storage::disk(RentalMedia::DISK)->put(
                     $path,
@@ -75,7 +75,7 @@ class RentalDocumentService
                 continue;
             }
 
-            $path = sprintf('rentals/%d/%s-%s.jpg', $to->id, $type, Str::lower(Str::random(12)));
+            $path = sprintf('accounts/%d/rentals/%d/%s-%s.jpg', $to->account_id, $to->id, $type, Str::lower(Str::random(12)));
             $disk->copy($media->file_path, $path);
 
             RentalMedia::create([

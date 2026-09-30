@@ -9,6 +9,7 @@ use App\Models\ProductVariant;
 use App\Models\Purchase;
 use App\Models\Rental;
 use App\Models\Sale;
+use App\Models\SaleAssetDelivery;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Collection;
@@ -44,6 +45,13 @@ class DashboardService
         $margin = (float) $this->completedSaleDetails()
             ->whereBetween('sales.sale_date', [$from, $to])
             ->sum(DB::raw('sale_details.subtotal - sale_details.unit_cost * sale_details.quantity'));
+
+        // Los consumibles entregados con la venta (portaternos, correas) también son costo de la venta.
+        $margin -= (float) SaleAssetDelivery::query()
+            ->whereHas('sale', fn ($query) => $query
+                ->where('status', Sale::STATUS_COMPLETED)
+                ->whereBetween('sale_date', [$from, $to]))
+            ->sum(DB::raw('quantity * unit_cost'));
 
         $rentals = Rental::query()
             ->where('status', '!=', Rental::STATUS_CANCELLED)
@@ -172,6 +180,7 @@ class DashboardService
     public function topRented(CarbonInterface $from, CarbonInterface $to, int $limit = 5): Collection
     {
         return DB::table('rental_details')
+            ->where('rental_details.account_id', app(CurrentAccount::class)->requiredId())
             ->join('rentals', 'rentals.id', '=', 'rental_details.rental_id')
             ->join('physical_products', 'physical_products.id', '=', 'rental_details.physical_product_id')
             ->join('product_variants', 'product_variants.id', '=', 'physical_products.product_variant_id')
@@ -202,6 +211,7 @@ class DashboardService
     protected function completedSaleDetails(): Builder
     {
         return DB::table('sale_details')
+            ->where('sale_details.account_id', app(CurrentAccount::class)->requiredId())
             ->join('sales', 'sales.id', '=', 'sale_details.sale_id')
             ->whereNull('sales.deleted_at')
             ->where('sales.status', Sale::STATUS_COMPLETED);

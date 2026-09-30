@@ -35,4 +35,19 @@ return [
         ],
     ],
 
+    // Login con Google (laravel/socialite).
+    'google' => [
+        'client_id' => env('GOOGLE_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_CLIENT_SECRET'),
+        'redirect' => env('GOOGLE_REDIRECT_URI'),
+    ],
+
+    // Servicio central de facturación electrónica (Kipusoft Facturación).
+    // El token es de cada negocio y se configura en Facturación → Configuración.
+    'facturacion' => [
+        'url' => rtrim((string) env('FACTURACION_API_URL', 'https://factura.kipusoft.pe/api/v1'), '/'),
+        // SUNAT puede tardar: la API espera su respuesta antes de contestar.
+        'timeout' => (int) env('FACTURACION_TIMEOUT', 90),
+    ],
+
 ];

@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
 
 class InventoryMovement extends Model
 {
-    use HasFactory;
+    use BelongsToAccount, HasFactory;
 
     public const TYPE_IN = 'in';
 

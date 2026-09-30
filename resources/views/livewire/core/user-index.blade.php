@@ -16,19 +16,19 @@
                 </flux:heading>
 
                 <flux:text class="mt-1.5">
-                    Administra el acceso de administradores y vendedores.
+                    Personas con acceso a este negocio. Retirar a alguien no borra su historial ni su cuenta en otros negocios.
                 </flux:text>
             </div>
         </div>
 
         <div class="flex flex-wrap items-center gap-2">
             <flux:button wire:click="openCreateModal" variant="primary" icon="plus">
-                Agregar usuario
+                Agregar persona
             </flux:button>
 
             <flux:button wire:click="$toggle('showArchived')" variant="outline"
                 :icon="$showArchived ? 'users' : 'archive-box'">
-                {{ $showArchived ? 'Volver a usuarios' : 'Dados de baja' }}
+                {{ $showArchived ? 'Volver a usuarios' : 'Retirados' }}
             </flux:button>
         </div>
     </div>
@@ -65,6 +65,9 @@
                                 {{ $user->name }}
                             </flux:heading>
 
+                            @if ($user->id === $ownerId)
+                                <flux:badge size="sm" color="amber" icon="star">Dueño</flux:badge>
+                            @endif
                             @if ($user->id === auth()->id())
                                 <flux:badge size="sm" color="zinc">Tú</flux:badge>
                             @endif
@@ -82,9 +85,6 @@
                             <flux:badge size="sm" color="emerald" icon="shopping-bag">Vendedor</flux:badge>
                         @endif
 
-                        @unless ($user->is_active)
-                            <flux:badge size="sm" color="red">Inactivo</flux:badge>
-                        @endunless
                     </div>
                 </div>
 
@@ -101,7 +101,7 @@
                     <div class="mt-4 flex gap-2 border-t border-slate-200/60 pt-3 dark:border-slate-800">
                         <flux:button wire:click.stop="restoreUser({{ $user->id }})" variant="primary" size="sm"
                             class="flex-1">
-                            Restaurar
+                            Devolver acceso
                         </flux:button>
                     </div>
                 @endif
@@ -110,7 +110,7 @@
             <div
                 class="col-span-full rounded-2xl border border-dashed border-slate-200 p-12 text-center dark:border-slate-800">
                 <flux:text class="text-slate-500 dark:text-slate-400">
-                    {{ $showArchived ? 'No hay usuarios dados de baja.' : 'No se encontraron usuarios con los filtros seleccionados.' }}
+                    {{ $showArchived ? 'No hay personas retiradas.' : 'No se encontraron usuarios con los filtros seleccionados.' }}
                 </flux:text>
             </div>
         @endforelse

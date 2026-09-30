@@ -3,6 +3,7 @@
 namespace App\Livewire\Core;
 
 use App\Services\Core\DashboardService;
+use App\Services\Inventory\ValuationService;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Computed;
@@ -64,6 +65,17 @@ class Dashboard extends Component
         $date = $this->selectedDate();
 
         return app(DashboardService::class)->periodStats($date->startOfMonth(), $date->endOfMonth());
+    }
+
+    /**
+     * Valorizado actual de la empresa (no depende de la fecha consultada).
+     *
+     * @return array{cost: float, value: float}
+     */
+    #[Computed]
+    public function companyValue(): array
+    {
+        return app(ValuationService::class)->summary();
     }
 
     #[Computed]

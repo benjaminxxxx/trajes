@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class OperationalExpense extends Model
 {
-    use AuditsDeletion, HasFactory;
+    use AuditsDeletion, BelongsToAccount, HasFactory;
 
     protected $fillable = [
         'user_id',

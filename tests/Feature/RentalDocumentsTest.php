@@ -59,7 +59,7 @@ test('document photos are stored privately, reduced and labelled with the rental
 
     expect($documents)->toHaveCount(2)
         ->and($documents->pluck('label')->all())->toBe(['Anverso', 'Reverso con sello'])
-        ->and($documents->first()->file_path)->toStartWith("rentals/{$rental->id}/dni-");
+        ->and($documents->first()->file_path)->toStartWith("accounts/{$rental->account_id}/rentals/{$rental->id}/dni-");
 
     Storage::disk('local')->assertExists($documents->first()->file_path);
     Storage::disk('public')->assertMissing($documents->first()->file_path);
@@ -79,7 +79,7 @@ test('document photos are only served to users who can see rentals', function ()
     auth()->logout();
 
     $this->get($media->url())->assertRedirect(route('login'));
-    $this->actingAs(User::factory()->create())->get($media->url())->assertForbidden();
+    $this->actingAs(createMember())->get($media->url())->assertForbidden();
     $this->actingAs(createSeller())->get($media->url())
         ->assertOk()
         ->assertHeader('Cache-Control', 'max-age=0, no-store, private');

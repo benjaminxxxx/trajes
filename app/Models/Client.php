@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Client extends Model
 {
-    use SoftDeletes;
+    use BelongsToAccount, SoftDeletes;
 
     protected $fillable = [
         'uuid',
@@ -55,6 +55,7 @@ class Client extends Model
     {
         return $this->hasMany(Rental::class);
     }
+
     /**
      * Retorna un color consistente para el avatar según el ID.
      */
@@ -70,7 +71,7 @@ class Client extends Model
             'green',
             'amber',
             'rose',
-            'fuchsia'
+            'fuchsia',
         ];
 
         return $colors[$this->id % count($colors)];
@@ -96,11 +97,11 @@ class Client extends Model
      */
     public function getDisplayNameAttribute($value): string
     {
-        if (!empty($value)) {
+        if (! empty($value)) {
             return $value;
         }
 
-        if ($this->type === 'PJ' || !empty($this->company_name)) {
+        if ($this->type === 'PJ' || ! empty($this->company_name)) {
             return $this->company_name ?? '';
         }
 

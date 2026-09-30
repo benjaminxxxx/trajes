@@ -12,6 +12,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class ItemMaintenance extends Model
 {
+    use BelongsToAccount;
+
     protected $table = 'item_maintenances';
 
     public const TYPES = [

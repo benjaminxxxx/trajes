@@ -3,10 +3,10 @@
 namespace App\Livewire\Purchasing;
 
 use App\Models\Supplier;
+use App\Services\Core\AccountRule;
 use App\Services\Purchasing\SupplierService;
 use Flux\Flux;
 use Illuminate\Contracts\View\View;
-use Illuminate\Validation\Rule;
 use Livewire\Attributes\On;
 use Livewire\Component;
 
@@ -95,7 +95,7 @@ class SupplierModal extends Component
                 'required',
                 'string',
                 'max:30',
-                Rule::unique('suppliers', 'document_number')
+                AccountRule::unique('suppliers', 'document_number')
                     ->where('document_type', $this->document_type)
                     ->ignore($this->supplierId),
             ],

@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class RentalDetail extends Model
 {
-    use HasFactory;
+    use BelongsToAccount, HasFactory;
 
     public const CONDITION_LABELS = [
         'good' => 'Buena',

@@ -13,8 +13,12 @@ use Illuminate\Database\Seeder;
  */
 class SupplierSeeder extends Seeder
 {
+    use RunsInAccount;
+
     public function run(SupplierService $service): void
     {
+        $this->ensureAccount();
+
         foreach ($this->suppliers() as $supplier) {
             $exists = Supplier::withTrashed()
                 ->where('document_type', $supplier['document_type'])

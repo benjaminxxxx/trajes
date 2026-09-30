@@ -6,11 +6,12 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Sale extends Model
 {
-    use HasFactory, SoftDeletes;
+    use BelongsToAccount, HasFactory, SoftDeletes;
 
     public const STATUS_COMPLETED = 'completed';
 
@@ -66,9 +67,42 @@ class Sale extends Model
         return $this->hasMany(SaleDetail::class);
     }
 
+    /**
+     * Consumibles entregados con la venta (portaternos, correas...).
+     */
+    public function assetDeliveries(): HasMany
+    {
+        return $this->hasMany(SaleAssetDelivery::class);
+    }
+
     public function cancelledBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'cancelled_by');
+    }
+
+    /**
+     * Comprobantes electrónicos emitidos o intentados (historial completo).
+     */
+    public function sunatDocuments(): HasMany
+    {
+        return $this->hasMany(SunatDocument::class)->latest('id');
+    }
+
+    /**
+     * El comprobante vigente de producción: válido o todavía esperando respuesta de SUNAT.
+     * Los de modo prueba no cuentan (ver SunatDocument::scopeLive).
+     */
+    public function liveSunatDocument(): HasOne
+    {
+        return $this->hasOne(SunatDocument::class)->ofMany(['id' => 'max'], fn ($q) => $q->live());
+    }
+
+    /**
+     * Último comprobante emitido en modo prueba (solo informativo: no bloquea volver a facturar).
+     */
+    public function latestTestSunatDocument(): HasOne
+    {
+        return $this->hasOne(SunatDocument::class)->ofMany(['id' => 'max'], fn ($q) => $q->where('environment', 'beta'));
     }
 
     public function isCancelled(): bool

@@ -3,6 +3,7 @@
 namespace App\Livewire\Sale;
 
 use App\Models\Sale;
+use App\Services\Billing\BillingService;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Url;
@@ -51,7 +52,7 @@ class SaleIndex extends Component
     public function render(): View
     {
         $sales = Sale::query()
-            ->with(['client:id,display_name,document_number', 'user:id,name'])
+            ->with(['client:id,display_name,document_number', 'user:id,name', 'liveSunatDocument', 'latestTestSunatDocument'])
             ->withSum('details as units_count', 'quantity')
             ->when(in_array($this->status, [Sale::STATUS_COMPLETED, Sale::STATUS_CANCELLED]),
                 fn ($q) => $q->where('status', $this->status))
@@ -73,6 +74,7 @@ class SaleIndex extends Component
         return view('livewire.sale.sale-index', [
             'sales' => $sales,
             'pendingInvoiceCount' => Sale::where('status', Sale::STATUS_COMPLETED)->where('has_invoice_pending', true)->count(),
+            'billingEnabled' => app(BillingService::class)->isEnabled(),
         ]);
     }
 }

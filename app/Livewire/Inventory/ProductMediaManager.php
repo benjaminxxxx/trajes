@@ -4,9 +4,11 @@ namespace App\Livewire\Inventory;
 
 use App\Models\Color;
 use App\Models\Product;
+use App\Services\Core\AccountRule;
 use App\Services\Inventory\ProductService;
 use Livewire\Attributes\On;
 use Livewire\Component;
+use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 use Livewire\WithFileUploads;
 
 class ProductMediaManager extends Component
@@ -14,12 +16,14 @@ class ProductMediaManager extends Component
     use WithFileUploads;
 
     public bool $show = false;
+
     public ?int $productId = null;
 
-    /** @var \Livewire\Features\SupportFileUploads\TemporaryUploadedFile[] */
+    /** @var TemporaryUploadedFile[] */
     public array $newFiles = [];
 
     public ?int $colorId = null;
+
     public bool $isPrimary = false;
 
     #[On('manageMedia')]
@@ -34,7 +38,7 @@ class ProductMediaManager extends Component
     {
         $this->validate([
             'newFiles.*' => 'required|file|mimes:jpg,jpeg,png,webp,mp4,mov|max:20480', // Max 20MB por archivo
-            'colorId' => 'nullable|exists:colors,id',
+            'colorId' => ['nullable', AccountRule::exists('colors')],
         ]);
 
         $product = Product::findOrFail($this->productId);

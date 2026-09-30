@@ -5,6 +5,7 @@ namespace App\Livewire\Rental;
 use App\Livewire\Shared\ManagesCartItems;
 use App\Models\Client;
 use App\Models\Rental;
+use App\Services\Core\AccountRule;
 use App\Services\Rental\RentalDocumentService;
 use App\Services\Rental\RentalService;
 use App\Services\Rental\ReservationService;
@@ -163,7 +164,7 @@ class RentalForm extends Component
         $unitIds = collect($this->items)->pluck('physical_product_id')->filter()->map(fn ($id) => (int) $id)->values()->all();
 
         $this->validate([
-            'client_id' => ['required', 'integer', 'exists:clients,id'],
+            'client_id' => ['required', 'integer', AccountRule::exists('clients')],
             'pickup_date' => ['required', 'date'],
         ], [
             'client_id.required' => 'Elige para qué cliente se separan las prendas.',

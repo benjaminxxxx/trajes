@@ -2,6 +2,7 @@
 
 namespace App\Services\Inventory;
 
+use App\Services\Core\CurrentAccount;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
@@ -129,6 +130,7 @@ class CategoryReportService
     protected function rentedUnitsQuery(): Builder
     {
         return DB::table('rental_details')
+            ->where('rental_details.account_id', app(CurrentAccount::class)->requiredId())
             ->join('rentals', 'rentals.id', '=', 'rental_details.rental_id')
             ->join('physical_products', 'physical_products.id', '=', 'rental_details.physical_product_id')
             ->join('product_variants', 'product_variants.id', '=', 'physical_products.product_variant_id')
@@ -140,6 +142,7 @@ class CategoryReportService
     protected function soldUnitsQuery(): Builder
     {
         return DB::table('sale_details')
+            ->where('sale_details.account_id', app(CurrentAccount::class)->requiredId())
             ->join('sales', 'sales.id', '=', 'sale_details.sale_id')
             ->join('product_variants', 'product_variants.id', '=', 'sale_details.product_variant_id')
             ->join('products', 'products.id', '=', 'product_variants.product_id')

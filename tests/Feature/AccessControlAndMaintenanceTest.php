@@ -68,7 +68,7 @@ test('the menu only lists what the user can open', function () {
 
     $adminLabels = collect(app(NavigationMenu::class)->for(createAdmin()))->pluck('label')->all();
 
-    expect($adminLabels)->toBe(['Dashboard', 'Ventas', 'Alquileres', 'Inventario', 'Compras', 'Directorio', 'Finanzas', 'Administración']);
+    expect($adminLabels)->toBe(['Dashboard', 'Ventas', 'Facturación', 'Alquileres', 'Inventario', 'Compras', 'Directorio', 'Finanzas', 'Administración']);
 });
 
 test('quick actions to sell and rent hide inside their own module', function (string $route, array $expected) {
@@ -101,7 +101,7 @@ test('the layout renders the sidebar with floating and inline quick actions', fu
 test('every sidebar section renders as an expandable group that also works collapsed', function () {
     $html = $this->actingAs(createAdmin())->get(route('dashboard'))->assertOk()->getContent();
 
-    $sections = ['Ventas', 'Alquileres', 'Inventario', 'Compras', 'Directorio', 'Finanzas', 'Administración'];
+    $sections = ['Ventas', 'Facturación', 'Alquileres', 'Inventario', 'Compras', 'Directorio', 'Finanzas', 'Administración'];
 
     // Una disclosure (sidebar expandido) y un dropdown (sidebar colapsado) por sección.
     expect(preg_match_all('/<ui-disclosure[^>]*data-flux-sidebar-group[\s>]/', $html))->toBe(count($sections))

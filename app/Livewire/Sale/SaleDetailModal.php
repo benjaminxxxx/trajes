@@ -2,7 +2,11 @@
 
 namespace App\Livewire\Sale;
 
+use App\Models\Client;
 use App\Models\Sale;
+use App\Models\SunatDocument;
+use App\Services\Billing\BillingService;
+use App\Services\Core\AccountRule;
 use App\Services\Sale\SaleService;
 use Flux\Flux;
 use Illuminate\Contracts\View\View;
@@ -40,6 +44,9 @@ class SaleDetailModal extends Component
 
     public string $cancellationReason = '';
 
+    // Remonta el buscador de cliente para que muestre el recién creado.
+    public int $clientPickerVersion = 0;
+
     #[On('open-sale-detail')]
     public function loadSale(int $id): void
     {
@@ -47,7 +54,7 @@ class SaleDetailModal extends Component
         $this->reset();
 
         $this->saleId = $id;
-        unset($this->sale);
+        unset($this->sale, $this->liveDocument);
 
         $sale = $this->sale;
 
@@ -85,8 +92,22 @@ class SaleDetailModal extends Component
     public function handleEntitySelected(string $context, int $id, string $label): void
     {
         if ($context === 'sale-edit-client') {
-            $this->client_id = $id;
-            $this->client_name = $label;
+            $this->changeClient($id, $label);
+        }
+    }
+
+    /**
+     * Cliente creado con el botón "+" (ej. para facturar a una empresa que
+     * aún no estaba registrada): queda asignado a la venta abierta.
+     */
+    #[On('client-created')]
+    public function selectCreatedClient(int $clientId): void
+    {
+        $client = $this->isOpen ? Client::find($clientId) : null;
+
+        if ($client) {
+            $this->changeClient($client->id, $client->display_name);
+            $this->clientPickerVersion++;
         }
     }
 
@@ -94,9 +115,42 @@ class SaleDetailModal extends Component
     public function handleEntityCleared(string $context): void
     {
         if ($context === 'sale-edit-client') {
-            $this->client_id = null;
-            $this->client_name = null;
+            $this->changeClient(null, null);
         }
+    }
+
+    /**
+     * El cliente se guarda en la venta apenas se elige, sin esperar al botón
+     * "Guardar": así "Facturar electrónicamente" siempre usa el cliente que se ve.
+     * Con un comprobante electrónico ya emitido no se cambia (debe coincidir con SUNAT).
+     */
+    protected function changeClient(?int $clientId, ?string $clientName): void
+    {
+        if (! $this->isOpen || ! $this->sale) {
+            return;
+        }
+
+        $this->authorize('ventas.editar');
+        $this->ensureEditable();
+
+        if ($this->liveDocument) {
+            $this->client_id = $this->sale->client_id;
+            $this->client_name = $this->sale->client?->display_name;
+            $this->clientPickerVersion++;
+            Flux::toast(variant: 'danger', text: 'La venta ya tiene un comprobante electrónico: el cliente no se puede cambiar.');
+
+            return;
+        }
+
+        $this->client_id = $clientId;
+        $this->client_name = $clientName;
+        $this->validateOnly('client_id', ['client_id' => ['nullable', 'integer', AccountRule::exists('clients')]]);
+
+        $this->sale->update(['client_id' => $clientId]);
+        unset($this->sale);
+
+        $this->dispatch('saleUpdated');
+        Flux::toast(variant: 'success', text: $clientName ? "Cliente de la venta: {$clientName}." : 'La venta quedó sin cliente.');
     }
 
     public function save(): void
@@ -105,26 +159,56 @@ class SaleDetailModal extends Component
         $this->ensureEditable();
 
         $validated = $this->validate([
-            'client_id' => ['nullable', 'integer', 'exists:clients,id'],
+            'client_id' => ['nullable', 'integer', AccountRule::exists('clients')],
             'sale_date' => ['required', 'date'],
             'notes' => ['nullable', 'string', 'max:1000'],
             'document_type' => ['required', Rule::in(array_keys(Sale::DOCUMENT_TYPES))],
             'document_number' => ['nullable', 'string', 'max:50'],
         ]);
 
+        // El comprobante electrónico manda: su tipo y número vienen de SUNAT, no se editan a mano.
+        if ($this->liveDocument) {
+            unset($validated['document_type'], $validated['document_number']);
+        }
+
         $this->sale->update($validated);
 
         $this->afterChange('Venta actualizada correctamente.');
     }
 
+    #[Computed]
+    public function billingEnabled(): bool
+    {
+        return app(BillingService::class)->isEnabled();
+    }
+
+    #[Computed]
+    public function liveDocument(): ?SunatDocument
+    {
+        return $this->sale?->liveSunatDocument()->first();
+    }
+
     /**
-     * No hay integración con facturación electrónica: "facturar" es registrar
-     * los datos del comprobante emitido y quitar la marca de pendiente.
+     * Abre la vista previa de facturación electrónica de esta venta.
+     */
+    public function openInvoice(): void
+    {
+        $this->authorize('facturacion.emitir');
+        $this->ensureEditable();
+
+        $this->isOpen = false;
+        $this->dispatch('open-invoice-sale', id: $this->saleId);
+    }
+
+    /**
+     * Sin facturación electrónica configurada: "facturar" es registrar
+     * los datos del comprobante emitido por fuera y quitar la marca de pendiente.
      */
     public function invoice(): void
     {
         $this->authorize('ventas.editar');
         $this->ensureEditable();
+        abort_if($this->billingEnabled, 403, 'Con facturación electrónica activa, use "Facturar electrónicamente".');
 
         $validated = $this->validate([
             'document_type' => ['required', Rule::in(['boleta', 'factura'])],
@@ -160,6 +244,21 @@ class SaleDetailModal extends Component
         }
 
         Flux::modal('cancel-sale')->close();
+
+        $pending = SunatDocument::where('sale_id', $this->saleId)->where('credit_note_required', true)->latest('id')->first();
+        if ($pending) {
+            // Sin notas de crédito automáticas aún: se avisa para emitirla por el comprobante que ya está en SUNAT.
+            $this->isOpen = false;
+            $this->dispatch('saleUpdated');
+            Flux::toast(
+                variant: 'warning',
+                duration: 10000,
+                text: "Venta {$this->sale->code} anulada y stock devuelto. Emita la nota de crédito por la {$pending->typeLabel()} {$pending->fullNumber()}.",
+            );
+
+            return;
+        }
+
         $this->afterChange("Venta {$this->sale->code} anulada. El stock fue devuelto.");
     }
 

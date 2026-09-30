@@ -27,6 +27,10 @@ return [
         'ventas.editar' => 'Editar y facturar ventas',
         'ventas.anular' => 'Anular ventas',
 
+        // Facturación electrónica
+        'facturacion.emitir' => 'Emitir facturas y boletas electrónicas de las ventas',
+        'facturacion.configurar' => 'Configurar la conexión con el servicio de facturación',
+
         // Alquileres
         'alquileres.ver' => 'Ver alquileres realizados',
         'alquileres.registrar' => 'Registrar alquileres',
@@ -44,6 +48,8 @@ return [
         'inventario.categorias' => 'Gestionar categorías',
         'inventario.atributos' => 'Gestionar tallas, colores y marcas',
         'inventario.seguimiento' => 'Ver el seguimiento de prendas',
+        'inventario.bienes' => 'Gestionar los bienes del negocio (mobiliario, consumibles...)',
+        'inventario.valorizado' => 'Ver el valorizado de la empresa',
 
         // Compras
         'compras.ver' => 'Ver compras',
@@ -61,6 +67,7 @@ return [
 
         // Seguridad
         'seguridad.usuarios' => 'Gestionar usuarios',
+        'configuracion.general' => 'Configuración del sistema (desgaste de prendas)',
     ],
 
     /*

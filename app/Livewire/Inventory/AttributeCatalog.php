@@ -5,11 +5,11 @@ namespace App\Livewire\Inventory;
 use App\Models\Brand;
 use App\Models\Color;
 use App\Models\Size;
+use App\Services\Core\AccountRule;
 use Flux\Flux;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
-use Illuminate\Validation\Rule;
 use Livewire\Attributes\Title;
 use Livewire\Attributes\Url;
 use Livewire\Component;
@@ -162,7 +162,7 @@ class AttributeCatalog extends Component
     protected function rules(?Model $record): array
     {
         $table = (new (self::TABS[$this->tab]))->getTable();
-        $unique = Rule::unique($table, 'name')->ignore($record?->id);
+        $unique = AccountRule::unique($table, 'name')->ignore($record?->id);
 
         return match ($this->tab) {
             'tallas' => [

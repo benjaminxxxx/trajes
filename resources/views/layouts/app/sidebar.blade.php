@@ -45,6 +45,18 @@
         <flux:sidebar.spacer />
 
         <flux:sidebar.nav>
+            @if (auth()->user()?->is_platform_admin)
+                <flux:sidebar.item icon="globe-alt" :href="route('platform.accounts.index')"
+                    :current="request()->routeIs('platform.*')" wire:navigate data-test="platform-link">
+                    Plataforma
+                </flux:sidebar.item>
+            @endif
+            {{-- Negocio actual: cambiar de negocio o registrar otro. --}}
+            @if ($currentAccount = app(\App\Services\Core\CurrentAccount::class)->get())
+                <flux:sidebar.item icon="building-storefront" :href="route('accounts.select')" data-test="current-account">
+                    {{ $currentAccount->name }}
+                </flux:sidebar.item>
+            @endif
             <flux:sidebar.item icon="moon" x-data x-on:click.prevent="$flux.dark = ! $flux.dark" href="#">
                 Modo oscuro
             </flux:sidebar.item>

@@ -12,8 +12,12 @@ use Illuminate\Support\Str;
  */
 class ClientSeeder extends Seeder
 {
+    use RunsInAccount;
+
     public function run(): void
     {
+        $this->ensureAccount();
+
         foreach ($this->clients() as $client) {
             $displayName = $client['type'] === 'company'
                 ? $client['company_name']

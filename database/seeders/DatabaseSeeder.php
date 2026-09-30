@@ -2,14 +2,14 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
+/**
+ * Sin WithoutModelEvents: los eventos de los modelos son necesarios (asignan
+ * el negocio actual a cada registro, marcan fechas de baja, auditan...).
+ */
 class DatabaseSeeder extends Seeder
 {
-    use WithoutModelEvents;
-
     /**
      * Seed the application's database.
      */
@@ -22,6 +22,7 @@ class DatabaseSeeder extends Seeder
             ClientSeeder::class,
             SupplierSeeder::class,
             ProductCatalogSeeder::class,
+            AssetSeeder::class,
             /*ProductSeeder::class,
             PurchaseSeeder::class,
             RentalSeeder::class,

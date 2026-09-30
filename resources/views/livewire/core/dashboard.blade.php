@@ -125,7 +125,7 @@
             <div class="mt-3 grid gap-3 lg:grid-cols-[1fr_20rem]">
                 <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                     @foreach ([
-                        ['Margen de ventas', $month['sales_margin'], '+', 'Venta sin IGV − costo de lo vendido'],
+                        ['Margen de ventas', $month['sales_margin'], '+', 'Venta sin IGV − costo de lo vendido y entregables'],
                         ['Alquileres', $month['rentals_total'], '+', 'Alquileres salidos en el mes'],
                         ['Cobros por daños', $month['damage_charges'], '+', 'Cobrado al recepcionar alquileres'],
                         ['Gastos de mantenimiento', $month['maintenance_cost'], '−', 'Lavado, arreglos, planchado'],
@@ -163,6 +163,16 @@
                             Margen + alquileres + cobros por daños − mantenimiento − gastos operativos − bajas.
                         </p>
                     </div>
+                    @can('inventario.valorizado')
+                        <a href="{{ route('inventory.valuation.index') }}" wire:navigate data-test="company-value-card"
+                            class="block rounded-2xl border border-violet-200 bg-violet-50 p-4 transition hover:border-violet-400 dark:border-violet-900/60 dark:bg-violet-950/30">
+                            <p class="text-xs font-medium text-violet-700 dark:text-violet-300">Valor de la empresa</p>
+                            <p class="mt-1 text-lg font-semibold tabular-nums text-zinc-900 dark:text-white">S/ {{ number_format($this->companyValue['value'], 2) }}</p>
+                            <p class="text-xs text-zinc-500">
+                                Prendas con desgaste, stock y bienes. Costo de compra: S/ {{ number_format($this->companyValue['cost'], 2) }}
+                            </p>
+                        </a>
+                    @endcan
                     <div class="rounded-2xl border border-dashed border-zinc-300 p-4 dark:border-zinc-700">
                         <p class="text-xs text-zinc-500">Compras del mes (flujo de caja)</p>
                         <p class="mt-1 text-lg font-semibold tabular-nums">S/ {{ number_format($month['purchases'], 2) }}</p>

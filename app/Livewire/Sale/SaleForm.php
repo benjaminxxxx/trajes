@@ -3,11 +3,14 @@
 namespace App\Livewire\Sale;
 
 use App\Livewire\Shared\ManagesCartItems;
+use App\Models\Asset;
 use App\Models\Client;
 use App\Models\PhysicalProduct;
 use App\Models\Sale;
+use App\Services\Billing\BillingService;
 use App\Services\Sale\SaleService;
 use Flux\Flux;
+use Illuminate\Support\Collection;
 use Livewire\Attributes\On;
 use Livewire\Component;
 
@@ -30,6 +33,14 @@ class SaleForm extends Component
     public ?string $notes = null;
 
     public array $items = [];
+
+    /**
+     * Consumibles a entregar con la venta: asset_id => ['enabled' => bool, 'quantity' => ?int].
+     * Sin cantidad elegida se usa la sugerida (una por prenda aplicable).
+     *
+     * @var array<int, array{enabled?: bool, quantity?: int|string|null}>
+     */
+    public array $deliveries = [];
 
     // Fuerza a que el buscador de cliente se remonte limpio tras guardar.
     public int $clientPickerVersion = 0;
@@ -186,6 +197,60 @@ class SaleForm extends Component
         }
     }
 
+    /**
+     * Consumibles que aplican a las categorías del carrito (o a todas si el
+     * bien no tiene categorías), con la cantidad sugerida: una por prenda.
+     *
+     * @return Collection<int, Asset>
+     */
+    public function deliverableAssets(): Collection
+    {
+        if ($this->items === []) {
+            return collect();
+        }
+
+        $unitsByCategory = collect($this->items)
+            ->groupBy(fn (array $item) => (int) ($item['category_id'] ?? 0))
+            ->map(fn (Collection $rows) => $rows->sum(fn (array $item) => ! empty($item['physical_product_id']) ? 1 : max(1, (int) ($item['quantity'] ?? 1))));
+
+        return Asset::deliverable()
+            ->where('quantity', '>', 0)
+            ->with('categories:id')
+            ->orderBy('name')
+            ->get()
+            ->map(function (Asset $asset) use ($unitsByCategory) {
+                $categoryIds = $asset->categories->pluck('id');
+                $asset->suggested_quantity = (int) ($categoryIds->isEmpty()
+                    ? $unitsByCategory->sum()
+                    : $unitsByCategory->only($categoryIds->all())->sum());
+
+                return $asset;
+            })
+            ->filter(fn (Asset $asset) => $asset->suggested_quantity > 0)
+            ->values();
+    }
+
+    /**
+     * @return array<int, int> asset_id => cantidad a entregar
+     */
+    protected function selectedDeliveries(): array
+    {
+        return $this->deliverableAssets()
+            ->filter(fn (Asset $asset) => ! empty($this->deliveries[$asset->id]['enabled']))
+            ->mapWithKeys(function (Asset $asset) {
+                $quantity = $this->deliveries[$asset->id]['quantity'] ?? null;
+
+                return [$asset->id => ($quantity === null || $quantity === '') ? $asset->suggested_quantity : (int) $quantity];
+            })
+            ->filter(fn (int $quantity) => $quantity > 0)
+            ->all();
+    }
+
+    public function billingEnabled(): bool
+    {
+        return app(BillingService::class)->isEnabled();
+    }
+
     public function save(SaleService $service): void
     {
         $this->authorize('ventas.registrar');
@@ -198,17 +263,22 @@ class SaleForm extends Component
             'items.required' => 'Agrega al menos un producto a la venta.',
         ]);
 
+        // Con facturación electrónica el número lo asigna SUNAT al facturar desde Ventas:
+        // elegir boleta o factura deja la venta pendiente de facturar.
+        $electronic = $this->billingEnabled();
+
         try {
             $sale = $service->register([
                 'client_id' => $this->client_id,
                 'document_type' => $this->document_type,
-                'document_number' => $this->document_number,
-                'has_invoice_pending' => $this->has_invoice_pending,
+                'document_number' => $electronic ? null : $this->document_number,
+                'has_invoice_pending' => $this->has_invoice_pending
+                    || ($electronic && in_array($this->document_type, ['boleta', 'factura'], true)),
                 'sale_date' => $this->sale_date,
                 'notes' => $this->notes,
-            ], $this->normalizedLines());
+            ], $this->normalizedLines(), $this->selectedDeliveries());
 
-            $this->reset(['client_id', 'client_name', 'document_number', 'has_invoice_pending', 'notes', 'items', 'redoFromCode']);
+            $this->reset(['client_id', 'client_name', 'document_number', 'has_invoice_pending', 'notes', 'items', 'deliveries', 'redoFromCode']);
             $this->document_type = 'nota_venta';
             $this->sale_date = now()->toDateString();
             $this->clientPickerVersion++;

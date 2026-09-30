@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\Core\CurrentAccount;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
 
@@ -20,6 +21,7 @@ trait AuditsDeletion
     {
         static::deleted(function (Model $model) {
             AuditLog::create([
+                'account_id' => $model->getAttribute('account_id') ?? app(CurrentAccount::class)->id(),
                 'auditable_type' => $model->getMorphClass(),
                 'auditable_id' => $model->getKey(),
                 'event' => 'deleted',

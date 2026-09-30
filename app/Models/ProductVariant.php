@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ProductVariant extends Model
 {
-    use HasFactory;
+    use BelongsToAccount, HasFactory;
 
     protected $fillable = [
         'product_id',

@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class RentalMedia extends Model
 {
-    use HasFactory;
+    use BelongsToAccount, HasFactory;
 
     public const DISK = 'local';
 

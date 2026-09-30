@@ -8,7 +8,6 @@ use App\Livewire\Shared\ProductPicker;
 use App\Models\PhysicalProduct;
 use App\Models\Product;
 use App\Models\Purchase;
-use App\Models\User;
 use App\Services\Purchasing\PurchaseService;
 use App\Services\Rental\RentalService;
 use App\Services\Sale\SaleService;
@@ -22,8 +21,7 @@ uses(RefreshDatabase::class);
 beforeEach(function () {
     $this->seed(RolesAndPermissionsSeeder::class);
 
-    $this->admin = User::factory()->create();
-    $this->admin->assignRole('admin');
+    $this->admin = createAdmin();
     $this->actingAs($this->admin);
 });
 

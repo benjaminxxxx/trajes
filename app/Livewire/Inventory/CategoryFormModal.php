@@ -5,6 +5,7 @@ namespace App\Livewire\Inventory;
 use App\Models\Category;
 use App\Models\Color;
 use App\Models\Size;
+use App\Services\Core\AccountRule;
 use Flux\Flux;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\DB;
@@ -80,14 +81,14 @@ class CategoryFormModal extends Component
 
         $validated = $this->validate([
             'name' => ['required', 'string', 'max:255'],
-            'parent_id' => ['nullable', Rule::exists('categories', 'id')->whereNull('deleted_at'), Rule::notIn(array_filter([$this->editingId]))],
+            'parent_id' => ['nullable', AccountRule::exists('categories')->whereNull('deleted_at'), Rule::notIn(array_filter([$this->editingId]))],
             'description' => ['nullable', 'string', 'max:1000'],
             'sort_order' => ['integer', 'min:0'],
             'is_active' => ['boolean'],
             'selectedSizes' => ['array'],
-            'selectedSizes.*' => ['integer', 'exists:sizes,id'],
+            'selectedSizes.*' => ['integer', AccountRule::exists('sizes')],
             'selectedColors' => ['array'],
-            'selectedColors.*' => ['integer', 'exists:colors,id'],
+            'selectedColors.*' => ['integer', AccountRule::exists('colors')],
         ], [], [
             'parent_id' => 'categoría padre',
         ]);

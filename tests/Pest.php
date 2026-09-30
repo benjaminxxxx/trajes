@@ -1,5 +1,7 @@
 <?php
 
+use App\Models\Account;
+use App\Models\AccountMember;
 use App\Models\Category;
 use App\Models\Client;
 use App\Models\PhysicalProduct;
@@ -10,10 +12,11 @@ use App\Models\RentalDetail;
 use App\Models\Sale;
 use App\Models\SaleDetail;
 use App\Models\User;
+use App\Services\Core\AccountService;
+use App\Services\Core\CurrentAccount;
 use Database\Seeders\RolesAndPermissionsSeeder;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
-use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 /*
@@ -29,6 +32,19 @@ use Tests\TestCase;
 
 pest()->extend(TestCase::class)
  // ->use(RefreshDatabase::class)
+    // Todo dato del negocio pertenece a un negocio: cada test arranca con uno
+    // de prueba como negocio actual (solo si la base está migrada).
+    ->beforeEach(function () {
+        if (! Schema::hasTable('accounts')) {
+            return;
+        }
+
+        (new RolesAndPermissionsSeeder)->run();
+
+        $account = createTestAccount('Negocio de prueba');
+        app()->instance('tests.account', $account);
+        app(CurrentAccount::class)->set($account);
+    })
     ->in('Feature');
 
 /*
@@ -63,27 +79,67 @@ function something()
 }
 
 /**
- * Usuario con rol admin (acceso total vía Gate::before). Siembra los roles si hace falta.
+ * El negocio de prueba con el que arranca cada test.
  */
-function createAdmin(): User
+function testAccount(): Account
 {
-    if (! Role::where('name', 'admin')->exists()) {
-        (new RolesAndPermissionsSeeder)->run();
+    return app('tests.account');
+}
+
+/**
+ * Otro negocio, con su dueño (admin). No cambia el negocio actual.
+ */
+function createTestAccount(string $name = 'Otro negocio'): Account
+{
+    $owner = User::factory()->create();
+
+    return app(AccountService::class)->createAccount($owner, ['name' => $name], Account::STATUS_ACTIVE);
+}
+
+/**
+ * Persona miembro de un negocio (el de prueba por defecto) con un rol, o sin
+ * rol si $role es null (para probar accesos prohibidos).
+ */
+function createMember(?string $role = null, ?Account $account = null): User
+{
+    $account ??= testAccount();
+    $user = User::factory()->create();
+
+    if ($role) {
+        app(AccountService::class)->addMember($account, $user, $role);
+    } else {
+        AccountMember::create(['account_id' => $account->id, 'user_id' => $user->id, 'status' => AccountMember::STATUS_ACTIVE]);
     }
 
-    return tap(User::factory()->create())->assignRole('admin');
+    $user->forceFill(['current_account_id' => $account->id])->save();
+
+    return $user;
+}
+
+/**
+ * Usuario con rol admin en el negocio de prueba (acceso total vía Gate::before).
+ */
+function createAdmin(?Account $account = null): User
+{
+    return createMember('admin', $account);
 }
 
 /**
  * Usuario con rol vendedor (solo los permisos de config/permissions.php).
  */
-function createSeller(): User
+function createSeller(?Account $account = null): User
 {
-    if (! Role::where('name', 'vendedor')->exists()) {
-        (new RolesAndPermissionsSeeder)->run();
-    }
+    return createMember('vendedor', $account);
+}
 
-    return tap(User::factory()->create())->assignRole('vendedor');
+/**
+ * Trabajar como una persona dentro de un negocio (como lo haría el middleware).
+ */
+function actingAsIn(User $user, Account $account): void
+{
+    $user->forceFill(['current_account_id' => $account->id])->save();
+    test()->actingAs($user);
+    app(CurrentAccount::class)->set($account);
 }
 
 function createClient(): Client

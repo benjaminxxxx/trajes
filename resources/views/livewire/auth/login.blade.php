@@ -10,6 +10,8 @@
 
         <x-passkey-verify />
 
+        @include('partials.google-button')
+
         <form method="POST" action="{{ route('login.store') }}" class="flex flex-col gap-6">
             @csrf
 

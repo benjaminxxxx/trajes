@@ -4,6 +4,7 @@ namespace App\Livewire\Rental;
 
 use App\Models\Rental;
 use App\Models\RentalMedia;
+use App\Services\Core\AccountRule;
 use App\Services\Rental\RentalDocumentService;
 use App\Services\Rental\RentalService;
 use Flux\Flux;
@@ -100,7 +101,7 @@ class RentalDetailModal extends Component
         abort_if(! $this->rental || $this->rental->isCancelled(), 403, 'El alquiler está anulado.');
 
         $validated = $this->validate([
-            'client_id' => ['required', 'integer', 'exists:clients,id'],
+            'client_id' => ['required', 'integer', AccountRule::exists('clients')],
             'pickup_date' => ['required', 'date'],
             'expected_return_date' => ['required', 'date', 'after:pickup_date'],
             'notes' => ['nullable', 'string', 'max:1000'],

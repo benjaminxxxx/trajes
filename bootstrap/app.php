@@ -1,5 +1,8 @@
 <?php
 
+use App\Http\Middleware\EnsureCurrentAccount;
+use App\Http\Middleware\EnsurePlatformAdmin;
+use Illuminate\Auth\Middleware\Authorize;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -12,7 +15,13 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        $middleware->alias([
+            'account' => EnsureCurrentAccount::class,
+            'platform' => EnsurePlatformAdmin::class,
+        ]);
+
+        // El negocio se fija antes de evaluar permisos (can:...).
+        $middleware->prependToPriorityList(Authorize::class, EnsureCurrentAccount::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
