@@ -2,12 +2,14 @@
 
 namespace App\Services\Purchasing;
 
+use App\Models\CashMovement;
 use App\Models\InventoryMovement;
 use App\Models\PhysicalProduct;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\Purchase;
 use App\Models\PurchaseDetail;
+use App\Services\Finance\CashService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
@@ -65,6 +67,14 @@ class PurchaseService
             foreach ($lines as $line) {
                 $this->registerLine($purchase, $line);
             }
+
+            // Lo pagado al proveedor (con IGV) sale de caja.
+            app(CashService::class)->expense(
+                CashMovement::ORIGIN_PURCHASE_EXPENSE,
+                $total,
+                trim("Compra #{$purchase->id} ".($purchase->document_number ?? '')),
+                $purchase,
+            );
 
             return $purchase->load('details.variant', 'details.physicalProducts');
         });
@@ -214,7 +224,16 @@ class PurchaseService
                 'notes' => "Corrección de cantidad en compra #{$detail->purchase_id}",
             ]);
 
+            $previousTotal = (float) $detail->purchase->total;
             $this->recalculateTotals($detail->purchase);
+
+            // Lo que ya no se compró vuelve a caja.
+            app(CashService::class)->income(
+                CashMovement::ORIGIN_PURCHASE_EXPENSE,
+                $previousTotal - (float) $detail->purchase->fresh()->total,
+                "Reingreso por corrección de la compra #{$detail->purchase_id}",
+                $detail->purchase,
+            );
 
             return $detail;
         });

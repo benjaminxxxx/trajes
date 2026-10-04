@@ -2,8 +2,10 @@
 
 namespace App\Services\Maintenance;
 
+use App\Models\CashMovement;
 use App\Models\ItemMaintenance;
 use App\Models\PhysicalProduct;
+use App\Services\Finance\CashService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
@@ -40,6 +42,13 @@ class MaintenanceService
                 'description' => filled($data['description'] ?? null) ? trim($data['description']) : null,
                 'maintenance_date' => $data['maintenance_date'],
             ]);
+
+            app(CashService::class)->expense(
+                CashMovement::ORIGIN_MAINTENANCE,
+                (float) $maintenance->cost,
+                (ItemMaintenance::TYPES[$data['type']] ?? 'Mantenimiento')." de la prenda {$unit->code}",
+                $maintenance,
+            );
 
             $afterStatus = $data['after_status'] ?? 'keep';
 

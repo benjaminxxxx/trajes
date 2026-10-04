@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Model;
  */
 class DepreciationRule extends Model
 {
-    use BelongsToAccount;
+    use AuditsChanges, BelongsToAccount;
 
     protected $fillable = [
         'min_rentals',

@@ -26,6 +26,11 @@
             <div class="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900"
                 x-data="{
                     items: $wire.entangle('items'),
+                    assets: $wire.entangle('assetLines'),
+                    assetTotal(key) {
+                        const line = this.assets[key];
+                        return this.round2((Number(line?.quantity) || 0) * (Number(line?.unit_price) || 0));
+                    },
                     round2(value) { return Math.round((Number(value) || 0) * 100) / 100; },
                     fromPrice(key) {
                         const item = this.items[key];
@@ -41,7 +46,8 @@
                         return total - total / 1.18;
                     },
                     get total() {
-                        return Object.values(this.items).reduce((sum, i) => sum + (Number(i.line_total) || 0), 0);
+                        return Object.values(this.items).reduce((sum, i) => sum + (Number(i.line_total) || 0), 0)
+                            + Object.keys(this.assets).reduce((sum, key) => sum + this.assetTotal(key), 0);
                     },
                     get subtotal() { return this.total / 1.18; },
                     get tax() { return this.total - this.subtotal; },
@@ -56,7 +62,7 @@
                 @if (empty($items))
                     <div class="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-zinc-300 py-10 text-center dark:border-zinc-700">
                         <flux:icon icon="shopping-cart" class="size-7 text-violet-500" />
-                        <span class="text-sm text-zinc-500">Agrega productos desde el catálogo de arriba.</span>
+                        <span class="text-sm text-zinc-500">Agrega productos desde el catálogo de arriba o un bien del negocio aquí abajo.</span>
                     </div>
                 @else
                     <div class="flex flex-col gap-3">
@@ -103,6 +109,47 @@
                                 </div>
                             </div>
                         @endforeach
+                    </div>
+                @endif
+
+                {{-- Bienes del negocio con precio de venta (portaternos, ganchos, muebles...) --}}
+                @php($sellableAssets = $this->sellableAssets())
+                @if ($sellableAssets->isNotEmpty() || ! empty($assetLines))
+                    <div class="mt-4 rounded-xl border border-dashed border-zinc-300 p-3 dark:border-zinc-700" data-test="sale-assets">
+                        <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            <p class="text-sm font-medium text-zinc-800 dark:text-zinc-200">Bienes en venta</p>
+                            @if ($sellableAssets->isNotEmpty())
+                                <flux:select wire:model.live="assetToAdd" size="sm" class="sm:max-w-xs" aria-label="Agregar un bien a la venta">
+                                    <flux:select.option value="">+ Agregar un bien...</flux:select.option>
+                                    @foreach ($sellableAssets as $asset)
+                                        <flux:select.option value="{{ $asset->id }}">
+                                            {{ $asset->name }} · S/ {{ number_format($asset->sale_price, 2) }} ({{ $asset->quantity }} disp.)
+                                        </flux:select.option>
+                                    @endforeach
+                                </flux:select>
+                            @endif
+                        </div>
+
+                        @foreach ($assetLines as $key => $line)
+                            <div class="mt-3 grid grid-cols-[1fr_auto] items-end gap-2 sm:grid-cols-[1fr_90px_130px_110px_auto]" wire:key="sale-asset-{{ $key }}">
+                                <div class="col-span-2 min-w-0 sm:col-span-1">
+                                    <p class="truncate text-sm font-semibold text-zinc-900 dark:text-white">{{ $line['name'] }}</p>
+                                    <p class="text-xs text-zinc-500">Bien del negocio · quedan {{ $line['available'] }}</p>
+                                </div>
+                                <flux:input type="number" min="1" max="{{ $line['available'] }}" size="sm" label="Cantidad"
+                                    x-model.number="assets['{{ $key }}'].quantity" />
+                                <flux:input type="number" step="0.01" min="0" size="sm" label="P. unit. (inc. IGV)"
+                                    x-model.number="assets['{{ $key }}'].unit_price" />
+                                <div class="pb-2 text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                                    <span x-show="assetTotal('{{ $key }}') > 0" x-text="'S/ ' + assetTotal('{{ $key }}').toFixed(2)"></span>
+                                    <span x-show="assetTotal('{{ $key }}') <= 0" class="text-emerald-600 dark:text-emerald-400">Regalo</span>
+                                </div>
+                                <flux:button icon="trash" variant="subtle" size="sm" wire:click="removeAssetLine('{{ $key }}')" aria-label="Quitar bien" />
+                            </div>
+                        @endforeach
+
+                        <flux:error name="assetLines.*.quantity" />
+                        <flux:error name="assetLines.*.unit_price" />
                     </div>
                 @endif
 

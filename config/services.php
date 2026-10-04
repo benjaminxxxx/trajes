@@ -50,4 +50,10 @@ return [
         'timeout' => (int) env('FACTURACION_TIMEOUT', 90),
     ],
 
+    // Consulta de RUC en SUNAT (misma API que usa el POS).
+    'sunat' => [
+        'url' => rtrim((string) env('SUNAT_API_URL', 'https://apisunat.perudevsolutions.com/public/api/v1'), '/'),
+        'token' => env('SUNAT_API_TOKEN', 'abcxyz'),
+    ],
+
 ];

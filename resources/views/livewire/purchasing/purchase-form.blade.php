@@ -73,13 +73,20 @@
                     <h2 class="text-lg font-semibold text-zinc-900 dark:text-white">Productos y variantes</h2>
                 </div>
 
-                <div class="mb-4">
-                    <livewire:shared.entity-search-select
-                        entityType="product"
-                        fieldContext="purchase-product"
-                        :resetAfterSelect="true"
-                        key="purchase-product-search"
-                    />
+                <div class="mb-4 flex items-start gap-2">
+                    <div class="min-w-0 flex-1">
+                        <livewire:shared.entity-search-select
+                            entityType="product"
+                            fieldContext="purchase-product"
+                            :resetAfterSelect="true"
+                            key="purchase-product-search"
+                        />
+                    </div>
+                    @can('inventario.productos')
+                    <flux:button type="button" icon="plus" variant="outline"
+                        wire:click="$dispatch('open-product-modal', { context: 'purchase' })"
+                        title="Nuevo producto" aria-label="Nuevo producto" />
+                    @endcan
                 </div>
 
                 @error('items')
@@ -90,7 +97,7 @@
                     <div class="flex w-full flex-col items-center gap-2 rounded-2xl border border-dashed border-zinc-300 py-10 text-center dark:border-zinc-700">
                         <flux:icon icon="cube" class="size-7 text-violet-500" />
                         <span class="text-sm font-semibold text-zinc-800 dark:text-zinc-200">Aún no hay productos</span>
-                        <span class="text-xs text-zinc-500">Busca un producto arriba para agregarlo a la compra.</span>
+                        <span class="text-xs text-zinc-500">Busca un producto arriba o créalo con el botón +.</span>
                     </div>
                 @else
                     <div class="flex flex-col gap-3">
@@ -175,10 +182,13 @@
             </flux:button>
 
             <p class="mt-3 text-center text-[11px] leading-5 text-zinc-500">
-                Al guardar, el stock se actualizará según la variante (talla + color) seleccionada.
+                Al guardar, el stock se actualiza por variante (talla + color) y el total sale de caja.
             </p>
         </aside>
     </form>
 
     <livewire:purchasing.supplier-modal key="purchase-supplier-form" />
+    @can('inventario.productos')
+    <livewire:inventory.product-form-modal key="purchase-product-form" />
+    @endcan
 </div>

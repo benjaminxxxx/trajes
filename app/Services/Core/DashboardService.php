@@ -10,6 +10,7 @@ use App\Models\Purchase;
 use App\Models\Rental;
 use App\Models\Sale;
 use App\Models\SaleAssetDelivery;
+use App\Services\Sale\SaleService;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Collection;
@@ -46,12 +47,13 @@ class DashboardService
             ->whereBetween('sales.sale_date', [$from, $to])
             ->sum(DB::raw('sale_details.subtotal - sale_details.unit_cost * sale_details.quantity'));
 
-        // Los consumibles entregados con la venta (portaternos, correas) también son costo de la venta.
-        $margin -= (float) SaleAssetDelivery::query()
+        // Bienes que salieron con la venta: lo cobrado por ellos (sin IGV) suma; su costo resta,
+        // tanto si se vendieron como si se regalaron (portaternos, correas).
+        $margin += (float) SaleAssetDelivery::query()
             ->whereHas('sale', fn ($query) => $query
                 ->where('status', Sale::STATUS_COMPLETED)
                 ->whereBetween('sale_date', [$from, $to]))
-            ->sum(DB::raw('quantity * unit_cost'));
+            ->sum(DB::raw('line_total / '.(1 + SaleService::TAX_RATE).' - quantity * unit_cost'));
 
         $rentals = Rental::query()
             ->where('status', '!=', Rental::STATUS_CANCELLED)
@@ -59,7 +61,7 @@ class DashboardService
             ->selectRaw('COUNT(*) as rentals_count, COALESCE(SUM(rental_total), 0) as rentals_total')
             ->first();
 
-        $expenses = (float) OperationalExpense::whereBetween('expense_date', [$from, $to])->sum('amount');
+        $expenses = (float) OperationalExpense::active()->whereBetween('expense_date', [$from, $to])->sum('amount');
 
         // Cobrado a clientes por daños o pérdidas al recepcionar alquileres.
         $damageCharges = (float) Rental::where('status', Rental::STATUS_RETURNED)
@@ -122,7 +124,7 @@ class DashboardService
                 $series['rentals'][$rental->pickup_date->month] += (float) $rental->rental_total;
             });
 
-        OperationalExpense::whereYear('expense_date', $year)
+        OperationalExpense::active()->whereYear('expense_date', $year)
             ->get(['expense_date', 'amount'])
             ->each(function (OperationalExpense $expense) use (&$series) {
                 $series['expenses'][$expense->expense_date->month] += (float) $expense->amount;

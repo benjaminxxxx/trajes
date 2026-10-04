@@ -6,7 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * Consumible (portaternos, correa...) entregado con una venta.
+ * Bien del negocio que salió con una venta: regalado (line_total = 0, ej. el
+ * portaternos) o vendido (line_total = lo cobrado con IGV).
  */
 class SaleAssetDelivery extends Model
 {
@@ -17,11 +18,13 @@ class SaleAssetDelivery extends Model
         'asset_id',
         'quantity',
         'unit_cost',
+        'line_total',
     ];
 
     protected $casts = [
         'quantity' => 'integer',
         'unit_cost' => 'decimal:4',
+        'line_total' => 'decimal:2',
     ];
 
     public function sale(): BelongsTo
@@ -32,6 +35,14 @@ class SaleAssetDelivery extends Model
     public function asset(): BelongsTo
     {
         return $this->belongsTo(Asset::class)->withTrashed();
+    }
+
+    /**
+     * Lo cobrado por la línea sin IGV (0 si fue regalo), comparable con el costo.
+     */
+    public function netTotal(): float
+    {
+        return round((float) $this->line_total / 1.18, 2);
     }
 
     public function totalCost(): float

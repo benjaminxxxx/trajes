@@ -1,6 +1,7 @@
 <?php
 
 use App\Livewire\Core\AccountPicker;
+use App\Livewire\Inventory\ProductFormModal;
 use App\Livewire\Inventory\ProductIndex;
 use App\Models\Account;
 use App\Models\BelongsToAccount;
@@ -13,6 +14,7 @@ use App\Services\Core\CurrentAccount;
 use App\Services\Documents\ReceiptService;
 use App\Services\Sale\SaleService;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
@@ -92,7 +94,8 @@ test('a business never sees the data of another business', function () {
 
     Livewire::test(ProductIndex::class)->assertSee('Terno propio')->assertDontSee('Terno del vecino');
 
-    $this->get(route('inventory.products.edit', $foreign))->assertNotFound();
+    expect(fn () => Livewire::test(ProductFormModal::class)->call('open', $foreign->id))
+        ->toThrow(ModelNotFoundException::class);
 });
 
 test('records get the current business and cannot be moved to another one', function () {

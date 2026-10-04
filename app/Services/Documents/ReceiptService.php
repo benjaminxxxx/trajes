@@ -148,7 +148,10 @@ class ReceiptService
             'client', 'user:id,name',
             'details.variant.product:id,name,code', 'details.variant.size:id,name', 'details.variant.color:id,name',
             'details.physicalProduct:id,code',
+            'assetDeliveries.asset',
         ]);
+
+        $assetTotal = (float) $sale->assetDeliveries->sum('line_total');
 
         // Montos con IGV por línea; la última absorbe el redondeo para que sumen el total cobrado.
         $lines = $sale->details->map(fn ($detail) => [
@@ -159,8 +162,18 @@ class ReceiptService
         ])->values()->all();
 
         if ($lines !== []) {
-            $difference = round((float) $sale->total - array_sum(array_column($lines, 'amount')), 2);
+            $difference = round((float) $sale->total - $assetTotal - array_sum(array_column($lines, 'amount')), 2);
             $lines[count($lines) - 1]['amount'] += $difference;
+        }
+
+        // Bienes del negocio que salieron con la venta: vendidos o de regalo (monto 0).
+        foreach ($sale->assetDeliveries as $delivery) {
+            $lines[] = [
+                'description' => $delivery->asset?->name ?? 'Bien',
+                'detail' => (float) $delivery->line_total > 0 ? '' : 'Regalo',
+                'quantity' => $delivery->quantity,
+                'amount' => (float) $delivery->line_total,
+            ];
         }
 
         foreach ($lines as &$line) {

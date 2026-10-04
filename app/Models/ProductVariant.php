@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ProductVariant extends Model
 {
-    use BelongsToAccount, HasFactory;
+    use AuditsChanges, BelongsToAccount, HasFactory;
 
     protected $fillable = [
         'product_id',
@@ -99,5 +99,13 @@ class ProductVariant extends Model
             ((int) $this->stock * (float) $this->average_cost - $quantity * $unitCost) / $remainingUnits
         ), 4);
         $this->save();
+    }
+
+    /**
+     * El stock y el costo promedio cambian solos con cada compra y venta (ver inventory_movements).
+     */
+    public function auditExcluded(): array
+    {
+        return ['stock', 'average_cost'];
     }
 }

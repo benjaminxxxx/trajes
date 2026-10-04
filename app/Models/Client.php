@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Client extends Model
 {
-    use BelongsToAccount, SoftDeletes;
+    use AuditsChanges, BelongsToAccount, SoftDeletes;
 
     protected $fillable = [
         'uuid',

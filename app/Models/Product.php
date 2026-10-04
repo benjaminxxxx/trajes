@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Product extends Model
 {
-    use BelongsToAccount, HasFactory, SoftDeletes;
+    use AuditsChanges, BelongsToAccount, HasFactory, SoftDeletes;
 
     protected $fillable = [
         'category_id',

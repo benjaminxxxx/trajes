@@ -5,6 +5,7 @@ namespace App\Services\Billing;
 use App\Models\BillingSetting;
 use App\Models\Client;
 use App\Models\Sale;
+use App\Models\SaleAssetDelivery;
 use App\Models\SaleDetail;
 use App\Models\SunatDocument;
 use Carbon\CarbonImmutable;
@@ -174,13 +175,31 @@ class BillingService
             }
         }
 
-        $difference = (int) round((float) $sale->total * 100) - array_sum($cents);
+        // Bienes del negocio vendidos en la venta (los regalados no se facturan).
+        $assetLines = SaleAssetDelivery::where('sale_id', $sale->id)->where('line_total', '>', 0)->with('asset')->orderBy('id')->get();
+        $assetCents = (int) round((float) $assetLines->sum('line_total') * 100);
+
+        $difference = (int) round((float) $sale->total * 100) - $assetCents - array_sum($cents);
         if ($difference !== 0 && $reconstructed !== []) {
             $largest = array_keys($reconstructed, max($reconstructed))[0];
             $cents[$largest] += $difference;
         }
 
-        return array_values($details->values()->map(function (SaleDetail $detail, int $i) use ($cents) {
+        $assetRows = $assetLines->map(function (SaleAssetDelivery $delivery) {
+            $quantity = max(1, (int) $delivery->quantity);
+            $amount = bcdiv((string) (int) round((float) $delivery->line_total * 100), '100', 2);
+
+            return [
+                'codigo' => null,
+                'descripcion' => Str::limit($delivery->asset?->name ?? 'Bien', 500, ''),
+                'unidad' => 'NIU',
+                'cantidad' => $quantity,
+                'precio_unitario' => rtrim(rtrim(bcdiv($amount, (string) $quantity, 10), '0'), '.'),
+                'importe' => $amount,
+            ];
+        })->all();
+
+        return array_values([...$details->values()->map(function (SaleDetail $detail, int $i) use ($cents) {
             $quantity = max(1, (int) $detail->quantity);
             $amount = bcdiv((string) $cents[$i], '100', 2);
             $product = $detail->variant?->product;
@@ -202,7 +221,7 @@ class BillingService
                 'precio_unitario' => rtrim(rtrim(bcdiv($amount, (string) $quantity, 10), '0'), '.'),
                 'importe' => $amount,
             ];
-        })->all());
+        })->all(), ...$assetRows]);
     }
 
     /**

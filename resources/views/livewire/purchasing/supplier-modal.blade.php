@@ -50,8 +50,23 @@
                     @endif
                 </flux:select>
 
-                <flux:input wire:model="document_number" label="Número de documento"
-                    :placeholder="$type === 'company' ? '20607845129' : '72849103'" required />
+                <flux:field>
+                    <flux:label>Número de documento</flux:label>
+                    <div class="flex items-start gap-2">
+                        <div class="min-w-0 flex-1">
+                            <flux:input wire:model="document_number" inputmode="numeric"
+                                :placeholder="$type === 'company' ? '20607845129' : '72849103'" required
+                                x-on:keydown.enter.prevent="$wire.document_type === 'RUC' ? $wire.lookupRuc() : null" />
+                        </div>
+                        <flux:button type="button" icon="magnifying-glass" variant="filled" wire:click="lookupRuc"
+                            wire:loading.attr="disabled" wire:target="lookupRuc"
+                            x-show="$wire.document_type === 'RUC'" title="Buscar RUC en SUNAT">
+                            <span wire:loading.remove wire:target="lookupRuc">Buscar</span>
+                            <span wire:loading wire:target="lookupRuc">Buscando...</span>
+                        </flux:button>
+                    </div>
+                    <flux:error name="document_number" />
+                </flux:field>
             </div>
 
             <!-- Nombre -->

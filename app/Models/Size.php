@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Size extends Model
 {
-    use BelongsToAccount, HasFactory;
+    use AuditsChanges, BelongsToAccount, HasFactory;
 
     /**
      * Grupos de talla sugeridos (el campo `type` acepta cualquier texto).

@@ -4,15 +4,18 @@ namespace App\Services\Assets;
 
 use App\Models\Asset;
 use App\Models\AssetMovement;
+use App\Models\CashMovement;
 use App\Models\Sale;
 use App\Models\SaleAssetDelivery;
+use App\Services\Finance\CashService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 /**
  * Único punto de escritura del stock de bienes: registro, ingresos (con costo
  * promedio ponderado), bajas, cambios de valor y entregas de consumibles con
- * las ventas. Cada operación deja su fila en asset_movements.
+ * las ventas. Cada operación deja su fila en asset_movements, y las compras
+ * pagadas desde caja generan su egreso.
  */
 class AssetService
 {
@@ -20,9 +23,9 @@ class AssetService
      * @param  array{name: string, type: string, quantity: int, unit_cost: float, current_unit_value?: float|null, is_consumable?: bool, delivers_with_sale?: bool, notes?: string|null}  $data
      * @param  array<int, int>  $categoryIds
      */
-    public function create(array $data, array $categoryIds = []): Asset
+    public function create(array $data, array $categoryIds = [], bool $paidFromCash = false): Asset
     {
-        return DB::transaction(function () use ($data, $categoryIds) {
+        return DB::transaction(function () use ($data, $categoryIds, $paidFromCash) {
             $asset = Asset::create([
                 ...$data,
                 'current_unit_value' => $data['current_unit_value'] ?? $data['unit_cost'],
@@ -32,6 +35,10 @@ class AssetService
             $asset->categories()->sync($categoryIds);
             $this->log($asset, 'initial', $asset->quantity, (float) $asset->unit_cost, 'Registro inicial');
 
+            if ($paidFromCash) {
+                $this->payFromCash($asset, $asset->quantity, (float) $asset->unit_cost);
+            }
+
             return $asset;
         });
     }
@@ -39,9 +46,9 @@ class AssetService
     /**
      * Compra de más unidades: suma stock y promedia costo de compra y valor actual.
      */
-    public function addStock(Asset $asset, int $quantity, float $unitCost, ?string $note = null): Asset
+    public function addStock(Asset $asset, int $quantity, float $unitCost, ?string $note = null, bool $paidFromCash = false): Asset
     {
-        return DB::transaction(function () use ($asset, $quantity, $unitCost, $note) {
+        return DB::transaction(function () use ($asset, $quantity, $unitCost, $note, $paidFromCash) {
             $asset = Asset::whereKey($asset->id)->lockForUpdate()->firstOrFail();
             $newQuantity = $asset->quantity + $quantity;
 
@@ -53,6 +60,10 @@ class AssetService
             ]);
 
             $this->log($asset, 'in', $quantity, $unitCost, $note);
+
+            if ($paidFromCash) {
+                $this->payFromCash($asset, $quantity, $unitCost);
+            }
 
             return $asset;
         });
@@ -97,17 +108,53 @@ class AssetService
     }
 
     /**
-     * Entrega consumibles con una venta (portaternos, correas...).
+     * Deja las entregas de una venta en un solo formato. Acepta el mapa
+     * simple de regalos (asset_id => cantidad) y las líneas con precio.
      *
-     * @param  array<int, int>  $quantities  asset_id => cantidad
+     * @param  array<int|string, int|string|array{asset_id: int, quantity: int|string, unit_price?: float|string|null}>  $deliveries
+     * @return array<int, array{asset_id: int, quantity: int, unit_price: float}>
      */
-    public function deliverForSale(Sale $sale, array $quantities): void
+    public function normalizeDeliveries(array $deliveries): array
     {
-        foreach (array_filter($quantities, fn ($quantity) => (int) $quantity > 0) as $assetId => $quantity) {
-            $asset = Asset::deliverable()->whereKey($assetId)->lockForUpdate()->first();
+        $lines = [];
 
-            if (! $asset) {
+        foreach ($deliveries as $key => $value) {
+            $line = is_array($value) ? $value : ['asset_id' => $key, 'quantity' => $value];
+            $quantity = (int) ($line['quantity'] ?? 0);
+
+            if ($quantity > 0) {
+                $lines[] = [
+                    'asset_id' => (int) $line['asset_id'],
+                    'quantity' => $quantity,
+                    'unit_price' => round(max(0, (float) ($line['unit_price'] ?? 0)), 2),
+                ];
+            }
+        }
+
+        return $lines;
+    }
+
+    /**
+     * Bienes que salen con una venta: regalados (portaternos, correas...) o
+     * vendidos, si el bien tiene precio de venta. El cobro va en el total de
+     * la venta; aquí se descuenta el stock y se guarda costo y precio.
+     *
+     * @param  array<int, array{asset_id: int, quantity: int, unit_price: float}>  $deliveries  ver normalizeDeliveries()
+     */
+    public function deliverForSale(Sale $sale, array $deliveries): void
+    {
+        foreach ($deliveries as $delivery) {
+            $quantity = $delivery['quantity'];
+            $sold = $delivery['unit_price'] > 0;
+
+            $asset = Asset::active()->whereKey($delivery['asset_id'])->lockForUpdate()->first();
+
+            if (! $asset || ! ($asset->sale_price !== null || ($asset->is_consumable && $asset->delivers_with_sale))) {
                 throw new \RuntimeException('El bien a entregar ya no está disponible.');
+            }
+
+            if ($sold && $asset->sale_price === null) {
+                throw new \RuntimeException("{$asset->name} no tiene precio de venta: no se puede vender.");
             }
 
             if ($asset->quantity < $quantity) {
@@ -121,9 +168,10 @@ class AssetService
                 'asset_id' => $asset->id,
                 'quantity' => $quantity,
                 'unit_cost' => $asset->unit_cost,
+                'line_total' => round($quantity * $delivery['unit_price'], 2),
             ]);
 
-            $this->log($asset, 'delivery', -$quantity, (float) $asset->unit_cost, "Venta {$sale->code}", $sale);
+            $this->log($asset, $sold ? 'sale' : 'delivery', -$quantity, (float) $asset->unit_cost, "Venta {$sale->code}", $sale);
         }
     }
 
@@ -137,6 +185,19 @@ class AssetService
 
             $this->log($delivery->asset, 'delivery_return', $delivery->quantity, (float) $delivery->unit_cost, "Anulación venta {$sale->code}", $sale);
         }
+    }
+
+    /**
+     * Compra de un bien pagada desde caja.
+     */
+    protected function payFromCash(Asset $asset, int $quantity, float $unitCost): void
+    {
+        app(CashService::class)->expense(
+            CashMovement::ORIGIN_ASSET_PURCHASE,
+            round($quantity * $unitCost, 2),
+            "Compra de {$quantity} × {$asset->name}",
+            $asset,
+        );
     }
 
     protected function weighted(int $currentQuantity, float $currentCost, int $addedQuantity, float $addedCost, int $total): float

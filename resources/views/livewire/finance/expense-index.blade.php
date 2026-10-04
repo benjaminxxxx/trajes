@@ -9,7 +9,7 @@
             </div>
             <h1 class="text-2xl font-semibold text-zinc-900 dark:text-white">Gastos operativos</h1>
             <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                Los gastos no se editan: si te equivocas, elimínalo y vuelve a registrarlo.
+                Los gastos no se editan ni se eliminan: si te equivocas, anúlalo (el monto vuelve a caja) y regístralo de nuevo.
             </p>
         </div>
         <div class="flex gap-2">
@@ -55,15 +55,25 @@
                             <flux:badge size="sm" color="violet">{{ $expense->category }}</flux:badge>
                         </flux:table.cell>
                         <flux:table.cell>
-                            <span class="block">{{ $expense->concept }}</span>
+                            <span @class(['block', 'text-zinc-400 line-through' => $expense->isCancelled()])>{{ $expense->concept }}</span>
+                            @if ($expense->isCancelled())
+                                <span class="block max-w-xs text-xs text-red-600 dark:text-red-400">
+                                    Anulado el {{ $expense->cancelled_at->format('d/m/Y H:i') }} por {{ $expense->cancelledBy?->name ?? '—' }}: {{ $expense->cancellation_reason }}
+                                </span>
+                            @endif
                             @if ($expense->notes)
                                 <span class="block max-w-xs truncate text-xs text-zinc-500" title="{{ $expense->notes }}">{{ $expense->notes }}</span>
                             @endif
                         </flux:table.cell>
-                        <flux:table.cell align="end" class="whitespace-nowrap font-semibold">S/ {{ number_format($expense->amount, 2) }}</flux:table.cell>
+                        <flux:table.cell align="end" @class(['whitespace-nowrap font-semibold', 'text-zinc-400 line-through' => $expense->isCancelled()])>S/ {{ number_format($expense->amount, 2) }}</flux:table.cell>
                         <flux:table.cell class="text-xs text-zinc-500">{{ $expense->user?->name ?? '—' }}</flux:table.cell>
                         <flux:table.cell align="end">
-                            <flux:button size="sm" variant="ghost" icon="trash" wire:click="confirmDelete({{ $expense->id }})" />
+                            @if ($expense->isCancelled())
+                                <flux:badge size="sm" color="red">Anulado</flux:badge>
+                            @else
+                                <flux:button size="sm" variant="ghost" icon="arrow-uturn-left" wire:click="confirmCancel({{ $expense->id }})"
+                                    title="Anular gasto" aria-label="Anular gasto" />
+                            @endif
                         </flux:table.cell>
                     </flux:table.row>
                 @endforeach
@@ -71,35 +81,37 @@
         </flux:table>
     @endif
 
-    {{-- Confirmación de eliminación --}}
-    <flux:modal wire:model="showDeleteModal" class="max-w-md">
-        @if ($this->pendingDeletion)
-            <div class="flex flex-col gap-4">
+    {{-- Anulación: el gasto se conserva y su monto vuelve a caja --}}
+    <flux:modal wire:model="showCancelModal" class="max-w-md">
+        @if ($this->pendingCancellation)
+            <form wire:submit="cancel" class="flex flex-col gap-4">
                 <div>
-                    <h2 class="text-lg font-semibold text-zinc-900 dark:text-white">Eliminar gasto</h2>
+                    <h2 class="text-lg font-semibold text-zinc-900 dark:text-white">Anular gasto</h2>
                     <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                        Se eliminará también su movimiento de caja. Queda registrado en la auditoría quién lo eliminó y los valores que tenía.
+                        El gasto no se borra: queda anulado y su monto vuelve a caja como reingreso.
                     </p>
                 </div>
 
                 <div class="rounded-xl border border-zinc-200 p-3 text-sm dark:border-zinc-700">
-                    <p class="text-xs font-semibold text-violet-600">{{ $this->pendingDeletion->category }}</p>
-                    <p class="font-medium text-zinc-900 dark:text-white">{{ $this->pendingDeletion->concept }}</p>
+                    <p class="text-xs font-semibold text-violet-600">{{ $this->pendingCancellation->category }}</p>
+                    <p class="font-medium text-zinc-900 dark:text-white">{{ $this->pendingCancellation->concept }}</p>
                     <p class="mt-1 text-zinc-500">
-                        S/ {{ number_format($this->pendingDeletion->amount, 2) }} · {{ $this->pendingDeletion->expense_date->format('d/m/Y H:i') }}
+                        S/ {{ number_format($this->pendingCancellation->amount, 2) }} · {{ $this->pendingCancellation->expense_date->format('d/m/Y H:i') }}
                     </p>
                 </div>
+
+                <flux:input wire:model="cancellationReason" label="Motivo" placeholder="Ej: registrado por error, era una prueba" required />
 
                 <div class="flex justify-end gap-2">
                     <flux:modal.close>
                         <flux:button variant="subtle">Cancelar</flux:button>
                     </flux:modal.close>
-                    <flux:button variant="danger" wire:click="delete">
-                        <span wire:loading.remove wire:target="delete">Eliminar</span>
-                        <span wire:loading wire:target="delete">Eliminando...</span>
+                    <flux:button type="submit" variant="danger">
+                        <span wire:loading.remove wire:target="cancel">Anular gasto</span>
+                        <span wire:loading wire:target="cancel">Anulando...</span>
                     </flux:button>
                 </div>
-            </div>
+            </form>
         @endif
     </flux:modal>
 

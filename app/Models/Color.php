@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Color extends Model
 {
-    use BelongsToAccount, HasFactory;
+    use AuditsChanges, BelongsToAccount, HasFactory;
 
     protected $fillable = [
         'name',

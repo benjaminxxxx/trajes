@@ -9,13 +9,14 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
- * Bien del negocio que no se vende: mobiliario, maniquíes, ganchos, o
- * consumibles como portaternos y correas. Suma al valorizado de la empresa.
+ * Bien del negocio: mobiliario, maniquíes, ganchos, o consumibles como
+ * portaternos y correas. Suma al valorizado de la empresa. Con `sale_price`
+ * también se puede vender desde el panel de ventas.
  * Se elimina de forma auditada (quién y cuándo, en audit_logs).
  */
 class Asset extends Model
 {
-    use AuditsDeletion, BelongsToAccount, SoftDeletes;
+    use AuditsChanges, BelongsToAccount, SoftDeletes;
 
     public const TYPES = [
         'mobiliario' => 'Mobiliario',
@@ -36,6 +37,7 @@ class Asset extends Model
         'quantity',
         'unit_cost',
         'current_unit_value',
+        'sale_price',
         'is_consumable',
         'delivers_with_sale',
         'status',
@@ -46,6 +48,7 @@ class Asset extends Model
         'quantity' => 'integer',
         'unit_cost' => 'decimal:4',
         'current_unit_value' => 'decimal:4',
+        'sale_price' => 'decimal:2',
         'is_consumable' => 'boolean',
         'delivers_with_sale' => 'boolean',
     ];
@@ -76,6 +79,22 @@ class Asset extends Model
     public function scopeActive(Builder $query): Builder
     {
         return $query->where('status', self::STATUS_ACTIVE);
+    }
+
+    /**
+     * Bienes con precio de venta: se pueden vender desde el panel de ventas.
+     */
+    public function scopeSellable(Builder $query): Builder
+    {
+        return $query->active()->whereNotNull('sale_price');
+    }
+
+    /**
+     * La cantidad y el estado ya dejan su rastro en asset_movements.
+     */
+    public function auditExcluded(): array
+    {
+        return ['quantity', 'status'];
     }
 
     /**

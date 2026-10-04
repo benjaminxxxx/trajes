@@ -76,6 +76,9 @@
                                 @if ($asset->status === 'discharged')
                                     <flux:badge size="sm" color="zinc">Dado de baja</flux:badge>
                                 @endif
+                                @if ($asset->sale_price !== null)
+                                    <flux:badge size="sm" color="emerald">Se vende a S/ {{ number_format($asset->sale_price, 2) }}</flux:badge>
+                                @endif
                                 @if ($asset->delivers_with_sale)
                                     <flux:badge size="sm" color="sky">
                                         Se entrega con la venta{{ $asset->categories->isNotEmpty() ? ': '.$asset->categories->pluck('name')->join(', ') : '' }}
@@ -128,7 +131,14 @@
                 <flux:input wire:model="unit_cost" type="number" step="0.01" min="0" label="Costo de compra (unid.)" :disabled="(bool) $assetId" />
                 <flux:input wire:model="current_unit_value" type="number" step="0.01" min="0" label="Valor actual (unid.)"
                     :placeholder="$assetId ? '' : 'Igual al costo'" />
+                <flux:input wire:model="sale_price" type="number" step="0.01" min="0" label="Precio de venta (inc. IGV)"
+                    placeholder="Vacío = no se vende" />
             </div>
+
+            @unless ($assetId)
+                <flux:switch wire:model="paidFromCash" label="Pagado desde caja" align="left"
+                    description="Descuenta de caja cantidad × costo. Desmárcalo si el bien ya lo tenías." />
+            @endunless
 
             @if ($assetId)
                 <flux:text class="text-xs">La cantidad y el costo de compra cambian con «Ingresar unidades» y «Dar de baja».</flux:text>
@@ -173,6 +183,8 @@
                 <flux:input wire:model="movementCost" type="number" step="0.01" min="0" label="Costo unitario" required />
             </div>
             <flux:input wire:model="movementNote" label="Nota" placeholder="Compra en el mercado" />
+            <flux:switch wire:model="paidFromCash" label="Pagado desde caja" align="left"
+                description="Descuenta de caja cantidad × costo unitario." />
             <div class="flex justify-end gap-2 border-t border-zinc-100 pt-4 dark:border-zinc-800">
                 <flux:modal.close>
                     <flux:button variant="subtle">Cancelar</flux:button>

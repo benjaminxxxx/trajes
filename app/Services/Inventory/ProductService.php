@@ -2,8 +2,12 @@
 
 namespace App\Services\Inventory;
 
+use App\Models\Brand;
+use App\Models\Category;
+use App\Models\Color;
 use App\Models\Product;
 use App\Models\ProductMedia;
+use App\Models\Size;
 use DB;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -12,14 +16,20 @@ use Str;
 
 class ProductService
 {
+    public function __construct(protected ProductImageOptimizer $optimizer) {}
+
     /**
-     * Guardar medio (imagen o video) en la galería del producto.
+     * Guardar medio (imagen o video) en la galería del producto. Las fotos se
+     * reducen antes de guardarse (ver ProductImageOptimizer); los videos van tal cual.
      */
     public function agregarMedia(Product $product, UploadedFile $file, ?int $colorId = null, bool $isPrimary = false): ProductMedia
     {
         return DB::transaction(function () use ($product, $file, $colorId, $isPrimary) {
-            $path = $file->store("accounts/{$product->account_id}/products/{$product->id}", 'public');
-            $fileType = str_starts_with($file->getMimeType(), 'video/') ? 'video' : 'image';
+            $directory = "accounts/{$product->account_id}/products/{$product->id}";
+            $fileType = str_starts_with((string) $file->getMimeType(), 'video/') ? 'video' : 'image';
+            $path = $fileType === 'image'
+                ? $this->optimizer->storeFromPath($file->getRealPath(), $directory, Str::random(40))
+                : $file->store($directory, 'public');
 
             if ($isPrimary) {
                 $product->media()->update(['is_primary' => false]);
@@ -75,6 +85,68 @@ class ProductService
                 }
             }
         });
+    }
+
+    /**
+     * Busca la categoría por nombre y, si no existe, la crea con todas las
+     * tallas y colores activos para que se pueda comprar de inmediato (luego
+     * se afinan en Inventario → Categorías).
+     */
+    public function resolverCategoria(string $name, bool $canCreate = true): Category
+    {
+        $name = trim($name);
+        $category = Category::withTrashed()->where('slug', Str::slug($name))->first();
+
+        if ($category?->trashed()) {
+            throw ValidationException::withMessages([
+                'category' => 'Esta categoría existe pero está dada de baja. Restáurela en Inventario → Categorías.',
+            ]);
+        }
+
+        if ($category) {
+            return $category;
+        }
+
+        if (! $canCreate) {
+            throw ValidationException::withMessages([
+                'category' => 'La categoría no existe y no tiene permiso para crearla. Elija una de la lista.',
+            ]);
+        }
+
+        return DB::transaction(function () use ($name) {
+            $category = Category::create(['name' => $name, 'slug' => Str::slug($name)]);
+
+            $category->sizes()->sync(Size::where('is_active', true)->pluck('id'));
+            $category->colors()->sync(Color::where('is_active', true)->pluck('id'));
+
+            return $category;
+        });
+    }
+
+    /**
+     * Busca la marca por nombre y, si no existe, la crea. Sin nombre no hay marca.
+     */
+    public function resolverMarca(?string $name, bool $canCreate = true): ?Brand
+    {
+        $name = trim((string) $name);
+
+        if ($name === '') {
+            return null;
+        }
+
+        $brand = Brand::where('slug', Str::slug($name))->first();
+
+        if ($brand) {
+            return $brand;
+        }
+
+        if (! $canCreate) {
+            throw ValidationException::withMessages([
+                'brand' => 'La marca no existe y no tiene permiso para crearla. Elija una de la lista.',
+            ]);
+        }
+
+        return Brand::create(['name' => $name, 'slug' => Str::slug($name)]);
     }
 
     /**

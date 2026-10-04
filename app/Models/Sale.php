@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Sale extends Model
 {
-    use BelongsToAccount, HasFactory, SoftDeletes;
+    use AuditsChanges, BelongsToAccount, HasFactory, SoftDeletes;
 
     public const STATUS_COMPLETED = 'completed';
 

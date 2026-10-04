@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Model;
  */
 class BillingSetting extends Model
 {
-    use BelongsToAccount;
+    use AuditsChanges, BelongsToAccount;
 
     public const STATUS_CONNECTED = 'conectado';
 
@@ -71,5 +71,13 @@ class BillingSetting extends Model
     public function maskedToken(): ?string
     {
         return filled($this->api_token) ? '••••'.substr((string) $this->api_token, -4) : null;
+    }
+
+    /**
+     * El estado de la conexión se actualiza solo en cada verificación.
+     */
+    public function auditExcluded(): array
+    {
+        return ['status', 'status_message', 'checked_at'];
     }
 }

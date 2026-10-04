@@ -5,6 +5,7 @@ namespace App\Livewire\Purchasing;
 use App\Models\Supplier;
 use App\Services\Core\AccountRule;
 use App\Services\Purchasing\SupplierService;
+use App\Services\Shared\RucLookup;
 use Flux\Flux;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\On;
@@ -82,6 +83,39 @@ class SupplierModal extends Component
         $this->type = $type === 'individual' ? 'individual' : 'company';
         $this->document_type = $this->type === 'company' ? 'RUC' : 'DNI';
         $this->resetValidation();
+    }
+
+    /**
+     * Completa el nombre y la dirección con los datos de SUNAT. Un RUC 10 es
+     * una persona natural ("APELLIDO APELLIDO NOMBRES"): se reparte en sus campos.
+     */
+    public function lookupRuc(RucLookup $lookup): void
+    {
+        $this->resetValidation();
+
+        $data = $lookup->find($this->document_number);
+
+        $this->document_number = $data['ruc'];
+
+        if ($this->type === 'company') {
+            $this->company_name = $data['name'];
+        } else {
+            $parts = preg_split('/\s+/', $data['name']);
+            $this->paternal_last_name = $parts[0] ?? null;
+            $this->maternal_last_name = $parts[1] ?? null;
+            $this->names = implode(' ', array_slice($parts, 2)) ?: null;
+        }
+
+        $this->address = $data['address'] ?? $this->address;
+        $this->phone = $data['phone'] ?? $this->phone;
+
+        if ($data['status'] && strtoupper($data['status']) !== 'ACTIVO') {
+            Flux::toast(variant: 'warning', text: "Ojo: SUNAT reporta este RUC como {$data['status']}.");
+
+            return;
+        }
+
+        Flux::toast(variant: 'success', text: 'Datos obtenidos de SUNAT.');
     }
 
     protected function rules(): array

@@ -15,9 +15,10 @@ use Livewire\Attributes\Url;
 use Livewire\Component;
 
 /**
- * Bienes del negocio: lo que no se vende (mobiliario, maniquíes, ganchos...)
- * y los consumibles que se entregan con la venta (portaternos, correas).
- * Suman al valorizado de la empresa. Solo administradores.
+ * Bienes del negocio: mobiliario, maniquíes, ganchos... y los consumibles que
+ * se entregan con la venta (portaternos, correas). Con precio de venta, un
+ * bien también se puede vender desde el panel de ventas. Suman al valorizado
+ * de la empresa. Solo administradores.
  */
 #[Title('Bienes del negocio')]
 class AssetIndex extends Component
@@ -48,6 +49,12 @@ class AssetIndex extends Component
     public float|string $unit_cost = '';
 
     public float|string $current_unit_value = '';
+
+    // Precio de venta con IGV; vacío = el bien no se vende.
+    public float|string|null $sale_price = '';
+
+    // La compra se paga desde caja (genera el egreso).
+    public bool $paidFromCash = true;
 
     public bool $is_consumable = false;
 
@@ -85,6 +92,7 @@ class AssetIndex extends Component
         $this->quantity = $asset->quantity;
         $this->unit_cost = round((float) $asset->unit_cost, 2);
         $this->current_unit_value = round((float) $asset->current_unit_value, 2);
+        $this->sale_price = $asset->sale_price === null ? '' : (float) $asset->sale_price;
         $this->is_consumable = $asset->is_consumable;
         $this->delivers_with_sale = $asset->delivers_with_sale;
         $this->category_ids = $asset->categories->pluck('id')->all();
@@ -102,6 +110,7 @@ class AssetIndex extends Component
             'quantity' => [$this->assetId ? 'nullable' : 'required', 'integer', 'min:0', 'max:100000'],
             'unit_cost' => [$this->assetId ? 'nullable' : 'required', 'numeric', 'min:0', 'max:9999999'],
             'current_unit_value' => ['nullable', 'numeric', 'min:0', 'max:9999999'],
+            'sale_price' => ['nullable', 'numeric', 'min:0.01', 'max:9999999'],
             'category_ids' => ['array'],
             'category_ids.*' => ['integer', AccountRule::exists('categories')],
             'notes' => ['nullable', 'string', 'max:1000'],
@@ -110,6 +119,7 @@ class AssetIndex extends Component
         $deliversWithSale = $this->is_consumable && $this->delivers_with_sale;
         $categoryIds = $deliversWithSale ? array_map('intval', $this->category_ids) : [];
         $currentValue = $this->current_unit_value === '' ? null : (float) $this->current_unit_value;
+        $salePrice = in_array($this->sale_price, ['', null], true) ? null : round((float) $this->sale_price, 2);
 
         if (! $this->assetId) {
             $service->create([
@@ -118,10 +128,11 @@ class AssetIndex extends Component
                 'quantity' => (int) $this->quantity,
                 'unit_cost' => (float) $this->unit_cost,
                 'current_unit_value' => $currentValue,
+                'sale_price' => $salePrice,
                 'is_consumable' => $this->is_consumable,
                 'delivers_with_sale' => $deliversWithSale,
                 'notes' => $this->notes,
-            ], $categoryIds);
+            ], $categoryIds, $this->paidFromCash);
 
             $this->showForm = false;
             Flux::toast(variant: 'success', text: "«{$this->name}» se registró.");
@@ -131,12 +142,13 @@ class AssetIndex extends Component
 
         // La cantidad y el costo de compra solo cambian con ingresos y bajas,
         // para que el historial del bien cuadre.
-        DB::transaction(function () use ($service, $deliversWithSale, $categoryIds, $currentValue) {
+        DB::transaction(function () use ($service, $deliversWithSale, $categoryIds, $currentValue, $salePrice) {
             $asset = Asset::findOrFail($this->assetId);
 
             $asset->update([
                 'name' => trim($this->name),
                 'type' => $this->type,
+                'sale_price' => $salePrice,
                 'is_consumable' => $this->is_consumable,
                 'delivers_with_sale' => $deliversWithSale,
                 'notes' => $this->notes,
@@ -170,7 +182,7 @@ class AssetIndex extends Component
             'movementNote' => ['nullable', 'string', 'max:255'],
         ]);
 
-        $asset = $service->addStock(Asset::findOrFail($this->assetId), (int) $this->movementQuantity, (float) $this->movementCost, $this->movementNote ?: null);
+        $asset = $service->addStock(Asset::findOrFail($this->assetId), (int) $this->movementQuantity, (float) $this->movementCost, $this->movementNote ?: null, $this->paidFromCash);
 
         $this->showStock = false;
         Flux::toast(variant: 'success', text: "Ahora hay {$asset->quantity} de «{$asset->name}».");
@@ -226,13 +238,13 @@ class AssetIndex extends Component
     protected function resetForm(): void
     {
         $this->resetValidation();
-        $this->reset(['assetId', 'name', 'type', 'quantity', 'unit_cost', 'current_unit_value', 'is_consumable', 'delivers_with_sale', 'category_ids', 'notes']);
+        $this->reset(['assetId', 'name', 'type', 'quantity', 'unit_cost', 'current_unit_value', 'sale_price', 'paidFromCash', 'is_consumable', 'delivers_with_sale', 'category_ids', 'notes']);
     }
 
     protected function resetMovement(int $id): void
     {
         $this->resetValidation();
-        $this->reset(['movementQuantity', 'movementCost', 'movementNote']);
+        $this->reset(['movementQuantity', 'movementCost', 'movementNote', 'paidFromCash']);
         $this->assetId = $id;
     }
 

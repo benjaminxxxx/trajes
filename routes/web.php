@@ -7,17 +7,18 @@ use App\Http\Controllers\Rental\RentalMediaController;
 use App\Livewire\Billing\BillingSettings;
 use App\Livewire\Billing\SunatDocumentIndex;
 use App\Livewire\Core\AccountPicker;
+use App\Livewire\Core\AuditIndex;
 use App\Livewire\Core\ClientIndex;
 use App\Livewire\Core\Dashboard;
 use App\Livewire\Core\SystemSettings;
 use App\Livewire\Core\UserIndex;
+use App\Livewire\Finance\CashIndex;
 use App\Livewire\Finance\ExpenseIndex;
 use App\Livewire\Inventory\AssetIndex;
 use App\Livewire\Inventory\AttributeCatalog;
 use App\Livewire\Inventory\CategoryIndex;
 use App\Livewire\Inventory\CompanyValuation;
 use App\Livewire\Inventory\PhysicalItemTracker;
-use App\Livewire\Inventory\ProductForm;
 use App\Livewire\Inventory\ProductIndex;
 use App\Livewire\Maintenance\LaundryIndex;
 use App\Livewire\Maintenance\MaintenanceHistory;
@@ -73,8 +74,6 @@ Route::middleware(['auth', 'verified', 'account'])->group(function () {
         ->middleware('can:inventario.atributos');
     Route::middleware('can:inventario.productos')->group(function () {
         Route::get('inventario/productos', ProductIndex::class)->name('inventory.products.index');
-        Route::get('inventario/productos/nuevo', ProductForm::class)->name('inventory.products.create');
-        Route::get('inventario/productos/{product}/editar', ProductForm::class)->name('inventory.products.edit');
     });
     Route::get('inventario/prendas-fisicas', PhysicalItemTracker::class)->name('inventory.physical-items.index')
         ->middleware('can:inventario.seguimiento');
@@ -132,6 +131,7 @@ Route::middleware(['auth', 'verified', 'account'])->group(function () {
     // ==========================================
     // 6. DOMINIO: FINANZAS Y CAJA (Finance)
     // ==========================================
+    Route::get('finanzas/caja', CashIndex::class)->name('finance.cash.index')->middleware('can:caja.ver');
     Route::get('finanzas/gastos', ExpenseIndex::class)->name('finance.expenses.index')->middleware('can:finanzas.gastos');
 
     // ==========================================
@@ -140,6 +140,7 @@ Route::middleware(['auth', 'verified', 'account'])->group(function () {
     Route::get('clientes', ClientIndex::class)->name('core.clients.index')->middleware('can:clientes.ver');
     Route::get('seguridad/usuarios', UserIndex::class)->name('core.users.index')->middleware('can:seguridad.usuarios');
     Route::get('configuracion', SystemSettings::class)->name('core.settings.index')->middleware('can:configuracion.general');
+    Route::get('seguridad/auditoria', AuditIndex::class)->name('core.audit.index')->middleware('can:auditoria.ver');
 
 });
 

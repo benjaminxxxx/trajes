@@ -28,9 +28,11 @@ class ExpenseIndex extends Component
     #[Url]
     public string $dateTo = '';
 
-    public bool $showDeleteModal = false;
+    public bool $showCancelModal = false;
 
-    public ?int $expenseToDelete = null;
+    public ?int $expenseToCancel = null;
+
+    public string $cancellationReason = '';
 
     public function mount(): void
     {
@@ -78,7 +80,7 @@ class ExpenseIndex extends Component
     public function expenses(): LengthAwarePaginator
     {
         return $this->baseQuery()
-            ->with('user')
+            ->with('user', 'cancelledBy:id,name')
             ->orderByDesc('expense_date')
             ->orderByDesc('id')
             ->paginate(15);
@@ -87,31 +89,42 @@ class ExpenseIndex extends Component
     #[Computed]
     public function periodTotal(): float
     {
-        return (float) $this->baseQuery()->sum('amount');
+        return (float) $this->baseQuery()->active()->sum('amount');
     }
 
     #[Computed]
-    public function pendingDeletion(): ?OperationalExpense
+    public function pendingCancellation(): ?OperationalExpense
     {
-        return $this->expenseToDelete ? OperationalExpense::find($this->expenseToDelete) : null;
+        return $this->expenseToCancel ? OperationalExpense::find($this->expenseToCancel) : null;
     }
 
-    public function confirmDelete(int $id): void
+    public function confirmCancel(int $id): void
     {
-        $this->expenseToDelete = $id;
-        $this->showDeleteModal = true;
+        $this->resetValidation();
+        $this->expenseToCancel = $id;
+        $this->cancellationReason = '';
+        $this->showCancelModal = true;
     }
 
-    public function delete(ExpenseService $service): void
+    /**
+     * El gasto no se borra: queda anulado y su monto vuelve a caja como reingreso.
+     */
+    public function cancel(ExpenseService $service): void
     {
+        $this->authorize('finanzas.gastos');
+
+        $this->validate(
+            ['cancellationReason' => ['required', 'string', 'min:3', 'max:255']],
+            ['cancellationReason.required' => 'Indica el motivo de la anulación.'],
+            ['cancellationReason' => 'motivo'],
+        );
+
         try {
-            $expense = OperationalExpense::findOrFail($this->expenseToDelete);
+            $service->cancel(OperationalExpense::findOrFail($this->expenseToCancel), $this->cancellationReason);
 
-            $service->delete($expense);
-
-            $this->showDeleteModal = false;
-            $this->expenseToDelete = null;
-            Flux::toast(variant: 'success', text: 'Gasto eliminado. Quedó registrado en la auditoría.');
+            $this->showCancelModal = false;
+            $this->expenseToCancel = null;
+            Flux::toast(variant: 'success', text: 'Gasto anulado: su monto volvió a caja.');
         } catch (\Throwable $th) {
             report($th);
             Flux::toast(variant: 'danger', text: $th->getMessage());

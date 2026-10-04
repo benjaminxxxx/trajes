@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Rental extends Model
 {
-    use BelongsToAccount, HasFactory, SoftDeletes;
+    use AuditsChanges, BelongsToAccount, HasFactory, SoftDeletes;
 
     public const STATUS_RESERVED = 'reserved';
 

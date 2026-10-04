@@ -11,6 +11,7 @@ use App\Models\Sale;
 use App\Models\SaleDetail;
 use App\Services\Assets\AssetService;
 use App\Services\Billing\BillingService;
+use App\Services\Finance\CashService;
 use App\Services\Rental\ReservationService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -38,12 +39,19 @@ class SaleService
     public const TAX_RATE = 0.18;
 
     /**
-     * @param  array<int, int>  $deliveries  consumibles entregados: asset_id => cantidad
+     * @param  array<int|string, int|array{asset_id: int, quantity: int, unit_price?: float}>  $deliveries  bienes que salen con la venta:
+     *                                                                                                      regalados (asset_id => cantidad) o vendidos (con unit_price, IGV incluido)
      */
     public function register(array $header, array $lines, array $deliveries = []): Sale
     {
         return DB::transaction(function () use ($header, $lines, $deliveries) {
-            $total = round(array_sum(array_map(fn (array $line) => $this->lineGross($line), $lines)), 2);
+            $deliveries = app(AssetService::class)->normalizeDeliveries($deliveries);
+
+            $total = round(
+                array_sum(array_map(fn (array $line) => $this->lineGross($line), $lines))
+                + array_sum(array_map(fn (array $delivery) => $delivery['quantity'] * $delivery['unit_price'], $deliveries)),
+                2
+            );
             $subtotal = round($total / (1 + self::TAX_RATE), 2);
             $tax = round($total - $subtotal, 2);
 
@@ -68,15 +76,8 @@ class SaleService
 
             app(AssetService::class)->deliverForSale($sale, $deliveries);
 
-            CashMovement::create([
-                'user_id' => Auth::id(),
-                'type' => CashMovement::TYPE_INCOME,
-                'origin' => CashMovement::ORIGIN_SALE_PAYMENT,
-                'amount' => $total,
-                'payment_method' => $header['payment_method'] ?? 'cash',
-                'reference_id' => $sale->id,
-                'reference_type' => Sale::class,
-                'description' => "Venta {$sale->code}",
+            app(CashService::class)->income(CashMovement::ORIGIN_SALE_PAYMENT, $total, "Venta {$sale->code}", $sale, [
+                'payment_method' => $header['payment_method'] ?? null,
             ]);
 
             return $sale->load('details.variant', 'details.physicalProduct');
@@ -126,16 +127,7 @@ class SaleService
 
             app(AssetService::class)->returnForSale($sale);
 
-            CashMovement::create([
-                'user_id' => Auth::id(),
-                'type' => CashMovement::TYPE_EXPENSE,
-                'origin' => CashMovement::ORIGIN_SALE_PAYMENT,
-                'amount' => $sale->total,
-                'payment_method' => 'cash',
-                'reference_id' => $sale->id,
-                'reference_type' => Sale::class,
-                'description' => "Anulación venta {$sale->code}",
-            ]);
+            app(CashService::class)->expense(CashMovement::ORIGIN_SALE_PAYMENT, (float) $sale->total, "Anulación venta {$sale->code}", $sale);
 
             $sale->update([
                 'status' => Sale::STATUS_CANCELLED,

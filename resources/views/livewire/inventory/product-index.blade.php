@@ -212,4 +212,5 @@
     </div>
 
     <livewire:inventory.product-media-manager />
+    <livewire:inventory.product-form-modal />
 </div>

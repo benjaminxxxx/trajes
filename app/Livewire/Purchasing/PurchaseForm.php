@@ -3,6 +3,7 @@
 namespace App\Livewire\Purchasing;
 
 use App\Models\Category;
+use App\Models\Product;
 use App\Models\Supplier;
 use App\Services\Purchasing\PurchaseService;
 use Flux\Flux;
@@ -67,6 +68,27 @@ class PurchaseForm extends Component
         if ($supplier) {
             $this->setSupplier($supplier->id, $supplier->display_name);
             $this->supplierPickerVersion++;
+        }
+    }
+
+    /**
+     * Producto recién creado desde el botón "+" del buscador: entra directo
+     * al detalle, sin tener que buscarlo.
+     */
+    #[On('product-saved')]
+    public function addCreatedProduct(int $productId, string $context = ''): void
+    {
+        if ($context !== 'purchase') {
+            return;
+        }
+
+        $product = Product::find($productId);
+
+        if ($product) {
+            $this->addProductToItems($product->id, $product->name, $product->code, [
+                'price' => (float) $product->price,
+                'category_id' => $product->category_id,
+            ]);
         }
     }
 
@@ -244,7 +266,7 @@ class PurchaseForm extends Component
             $this->issue_date = now()->toDateString();
             $this->supplierPickerVersion++;
 
-            Flux::toast(variant: 'success', text: "Compra #{$purchase->id} registrada correctamente.");
+            Flux::toast(variant: 'success', text: "Compra #{$purchase->id} registrada: S/ ".number_format((float) $purchase->total, 2).' salieron de caja.');
             $this->dispatch('purchaseSaved', purchaseId: $purchase->id);
         } catch (\Throwable $th) {
             report($th);

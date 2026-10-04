@@ -19,14 +19,10 @@ class DatabaseSeeder extends Seeder
             RolesAndPermissionsSeeder::class,
             UserSeeder::class,
             CategoryAndAttributeSeeder::class,
-            ClientSeeder::class,
-            SupplierSeeder::class,
-            ProductCatalogSeeder::class,
-            AssetSeeder::class,
-            /*ProductSeeder::class,
-            PurchaseSeeder::class,
-            RentalSeeder::class,
-            SaleSeeder::class*/
+            // ClientSeeder::class,
+            // SupplierSeeder::class,
+            // ProductCatalogSeeder::class,
+            // AssetSeeder::class,
         ]);
     }
 }

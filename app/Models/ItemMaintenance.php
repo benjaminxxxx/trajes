@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class ItemMaintenance extends Model
 {
-    use BelongsToAccount;
+    use AuditsChanges, BelongsToAccount;
 
     protected $table = 'item_maintenances';
 

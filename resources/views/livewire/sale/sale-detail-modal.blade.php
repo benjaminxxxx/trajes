@@ -112,8 +112,26 @@
                                     <td class="px-3 py-2 text-right tabular-nums">{{ number_format($detail->subtotal, 2) }}</td>
                                 </tr>
                             @endforeach
+
+                            {{-- Bienes del negocio que salieron con la venta: vendidos o de regalo --}}
+                            @foreach ($sale->assetDeliveries as $delivery)
+                                @php($assetMargin = $delivery->netTotal() - $delivery->totalCost())
+                                <tr wire:key="sale-asset-delivery-{{ $delivery->id }}">
+                                    <td class="px-3 py-2">
+                                        <span class="font-medium text-zinc-900 dark:text-white">{{ $delivery->asset?->name ?? 'Bien' }}</span>
+                                        <span class="block text-xs text-zinc-500">
+                                            Bien del negocio · {{ (float) $delivery->line_total > 0 ? 'vendido' : 'regalo' }}
+                                            · costo S/ {{ number_format($delivery->totalCost(), 2) }}
+                                            · margen <span class="{{ $assetMargin >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400' }}">S/ {{ number_format($assetMargin, 2) }}</span>
+                                        </span>
+                                    </td>
+                                    <td colspan="4" class="px-3 py-2 text-right tabular-nums text-zinc-500">{{ $delivery->quantity }} unid.</td>
+                                    <td class="px-3 py-2 text-right tabular-nums">{{ number_format($delivery->netTotal(), 2) }}</td>
+                                </tr>
+                            @endforeach
                         </tbody>
-                        @php($totalMargin = $sale->details->sum(fn ($d) => (float) $d->subtotal - (float) $d->unit_cost * $d->quantity))
+                        @php($totalMargin = $sale->details->sum(fn ($d) => (float) $d->subtotal - (float) $d->unit_cost * $d->quantity)
+                            + $sale->assetDeliveries->sum(fn ($d) => $d->netTotal() - $d->totalCost()))
                         <tfoot class="border-t border-zinc-200 text-sm dark:border-zinc-700">
                             <tr>
                                 <td colspan="5" class="px-3 py-1.5 text-right text-zinc-500">Op. gravada</td>

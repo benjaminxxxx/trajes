@@ -42,6 +42,17 @@ class SaleForm extends Component
      */
     public array $deliveries = [];
 
+    /**
+     * Bienes del negocio que se venden en esta venta (los que tienen precio
+     * de venta). Precio con IGV; en 0 el bien sale de regalo.
+     *
+     * @var array<string, array{asset_id: int, name: string, available: int, quantity: int|string, unit_price: float|string}>
+     */
+    public array $assetLines = [];
+
+    // Selector "agregar bien": al elegir uno se suma al detalle y vuelve a vacío.
+    public string $assetToAdd = '';
+
     // Fuerza a que el buscador de cliente se remonte limpio tras guardar.
     public int $clientPickerVersion = 0;
 
@@ -231,6 +242,63 @@ class SaleForm extends Component
     }
 
     /**
+     * Bienes con precio de venta y stock que aún no están en el detalle.
+     *
+     * @return Collection<int, Asset>
+     */
+    public function sellableAssets(): Collection
+    {
+        return Asset::sellable()
+            ->where('quantity', '>', 0)
+            ->whereNotIn('id', array_column($this->assetLines, 'asset_id'))
+            ->orderBy('name')
+            ->get(['id', 'name', 'quantity', 'sale_price']);
+    }
+
+    public function updatedAssetToAdd(string $assetId): void
+    {
+        $asset = Asset::sellable()->where('quantity', '>', 0)->find((int) $assetId);
+
+        if ($asset) {
+            $this->assetLines["asset-{$asset->id}"] = [
+                'asset_id' => $asset->id,
+                'name' => $asset->name,
+                'available' => $asset->quantity,
+                'quantity' => 1,
+                'unit_price' => (float) $asset->sale_price,
+            ];
+        }
+
+        $this->assetToAdd = '';
+    }
+
+    public function removeAssetLine(string $key): void
+    {
+        unset($this->assetLines[$key]);
+    }
+
+    /**
+     * Lo que sale del stock de bienes con esta venta: los entregables de
+     * regalo marcados y los bienes vendidos del detalle.
+     *
+     * @return array<int, array{asset_id: int, quantity: int, unit_price: float}>
+     */
+    protected function assetDeliveries(): array
+    {
+        $gifts = collect($this->selectedDeliveries())
+            ->map(fn (int $quantity, int $assetId) => ['asset_id' => $assetId, 'quantity' => $quantity, 'unit_price' => 0.0])
+            ->values();
+
+        $sold = collect($this->assetLines)->map(fn (array $line) => [
+            'asset_id' => (int) $line['asset_id'],
+            'quantity' => (int) $line['quantity'],
+            'unit_price' => (float) $line['unit_price'],
+        ])->values();
+
+        return [...$gifts, ...$sold];
+    }
+
+    /**
      * @return array<int, int> asset_id => cantidad a entregar
      */
     protected function selectedDeliveries(): array
@@ -258,9 +326,15 @@ class SaleForm extends Component
         $this->validate([
             'document_type' => 'required|in:nota_venta,boleta,factura',
             'sale_date' => 'required|date',
-            'items' => 'required|array|min:1',
+            // Una venta puede ser solo de bienes (ej. un portaterno suelto).
+            'items' => [$this->assetLines === [] ? 'required' : 'nullable', 'array'],
+            'assetLines.*.quantity' => ['required', 'integer', 'min:1'],
+            'assetLines.*.unit_price' => ['required', 'numeric', 'min:0'],
         ], [
-            'items.required' => 'Agrega al menos un producto a la venta.',
+            'items.required' => 'Agrega al menos un producto o un bien a la venta.',
+        ], [
+            'assetLines.*.quantity' => 'cantidad',
+            'assetLines.*.unit_price' => 'precio',
         ]);
 
         // Con facturación electrónica el número lo asigna SUNAT al facturar desde Ventas:
@@ -276,9 +350,9 @@ class SaleForm extends Component
                     || ($electronic && in_array($this->document_type, ['boleta', 'factura'], true)),
                 'sale_date' => $this->sale_date,
                 'notes' => $this->notes,
-            ], $this->normalizedLines(), $this->selectedDeliveries());
+            ], $this->normalizedLines(), $this->assetDeliveries());
 
-            $this->reset(['client_id', 'client_name', 'document_number', 'has_invoice_pending', 'notes', 'items', 'deliveries', 'redoFromCode']);
+            $this->reset(['client_id', 'client_name', 'document_number', 'has_invoice_pending', 'notes', 'items', 'deliveries', 'assetLines', 'redoFromCode']);
             $this->document_type = 'nota_venta';
             $this->sale_date = now()->toDateString();
             $this->clientPickerVersion++;

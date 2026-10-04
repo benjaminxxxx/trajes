@@ -54,7 +54,7 @@ class ExpenseYearSummary extends Component
     #[Computed]
     public function matrix(): Collection
     {
-        return OperationalExpense::query()
+        return OperationalExpense::active()
             ->whereYear('expense_date', $this->year)
             ->get(['category', 'amount', 'expense_date'])
             ->groupBy('category')

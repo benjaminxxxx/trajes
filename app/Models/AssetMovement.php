@@ -20,6 +20,7 @@ class AssetMovement extends Model
         'in' => 'Ingreso',
         'discharge' => 'Baja',
         'delivery' => 'Entregado con venta',
+        'sale' => 'Vendido',
         'delivery_return' => 'Devuelto por anulación',
         'revalue' => 'Cambio de valor',
     ];

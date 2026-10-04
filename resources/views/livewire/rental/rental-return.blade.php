@@ -33,7 +33,7 @@
                         Sin cobros por daños.
                     @endif
                     @if ((float) $rental->deposit_amount > 0)
-                        Recuerda devolver la garantía de S/ {{ number_format($rental->deposit_amount, 2) }} al cliente.
+                        Recuerda devolver la garantía de S/ {{ number_format($rental->deposit_amount, 2) }} al cliente: al recepcionar, sale de caja.
                     @endif
                 </flux:callout.text>
             </flux:callout>

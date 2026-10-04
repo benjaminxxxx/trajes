@@ -9,6 +9,7 @@ use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\Rental;
 use App\Models\RentalDetail;
+use App\Services\Finance\CashService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
@@ -49,20 +50,12 @@ class RentalService
                 $this->registerLine($rental, $line);
             }
 
-            $deposit = (float) ($header['deposit_amount'] ?? 0);
+            // A caja entra lo cobrado por el alquiler y, aparte, la garantía (que se devuelve al recepcionar).
+            $cash = app(CashService::class);
+            $options = ['payment_method' => $header['payment_method'] ?? null];
 
-            if ($deposit > 0) {
-                CashMovement::create([
-                    'user_id' => Auth::id(),
-                    'type' => CashMovement::TYPE_INCOME,
-                    'origin' => CashMovement::ORIGIN_RENTAL_PAYMENT,
-                    'amount' => $deposit,
-                    'payment_method' => $header['payment_method'] ?? 'cash',
-                    'reference_id' => $rental->id,
-                    'reference_type' => Rental::class,
-                    'description' => "Garantía/adelanto alquiler {$rental->code}",
-                ]);
-            }
+            $cash->income(CashMovement::ORIGIN_RENTAL_PAYMENT, $rentalTotal, "Alquiler {$rental->code}", $rental, $options);
+            $cash->income(CashMovement::ORIGIN_RENTAL_DEPOSIT, (float) $rental->deposit_amount, "Garantía alquiler {$rental->code}", $rental, $options);
 
             return $rental->load('details.physicalProduct');
         });
@@ -70,8 +63,8 @@ class RentalService
 
     /**
      * Anula el alquiler sin borrarlo: las prendas que siguen fuera por este
-     * alquiler vuelven a `available` y, si hubo garantía, se registra la
-     * salida de caja que la devuelve.
+     * alquiler vuelven a `available` y sale de caja lo que se había cobrado
+     * (el alquiler y, si sigue retenida, la garantía).
      */
     public function cancel(Rental $rental, string $reason): Rental
     {
@@ -82,21 +75,19 @@ class RentalService
                 throw new \RuntimeException("El alquiler {$rental->code} no se puede anular en su estado actual.");
             }
 
+            $depositHeld = $rental->status === Rental::STATUS_OUT;
+
             PhysicalProduct::whereIn('id', $rental->details()->pluck('physical_product_id'))
                 ->where('status', 'rented')
                 ->update(['status' => 'available']);
 
-            if ((float) $rental->deposit_amount > 0) {
-                CashMovement::create([
-                    'user_id' => Auth::id(),
-                    'type' => CashMovement::TYPE_EXPENSE,
-                    'origin' => CashMovement::ORIGIN_RENTAL_PAYMENT,
-                    'amount' => $rental->deposit_amount,
-                    'payment_method' => 'cash',
-                    'reference_id' => $rental->id,
-                    'reference_type' => Rental::class,
-                    'description' => "Devolución de garantía por anulación {$rental->code}",
-                ]);
+            // Sale de caja lo cobrado; la garantía solo si aún no se había devuelto (alquiler en curso).
+            $cash = app(CashService::class);
+
+            $cash->expense(CashMovement::ORIGIN_RENTAL_PAYMENT, (float) $rental->rental_total, "Anulación alquiler {$rental->code}", $rental);
+
+            if ($depositHeld) {
+                $cash->expense(CashMovement::ORIGIN_RENTAL_DEPOSIT, (float) $rental->deposit_amount, "Devolución de garantía por anulación {$rental->code}", $rental);
             }
 
             $rental->update([
@@ -126,7 +117,7 @@ class RentalService
      *
      * El cobro por daño es un ingreso (caja + historial de la prenda),
      * independiente de lo que luego cueste repararla. La garantía se devuelve
-     * en mano y no se registra aquí.
+     * al cliente: sale de caja al recepcionar.
      */
     public function receive(Rental $rental, array $data): Rental
     {
@@ -161,18 +152,13 @@ class RentalService
                 'penalty_total' => round($penaltyTotal, 2),
             ]);
 
-            if ($penaltyTotal > 0) {
-                CashMovement::create([
-                    'user_id' => Auth::id(),
-                    'type' => CashMovement::TYPE_INCOME,
-                    'origin' => CashMovement::ORIGIN_PENALTY_FEE,
-                    'amount' => round($penaltyTotal, 2),
-                    'payment_method' => $data['payment_method'] ?? 'cash',
-                    'reference_id' => $rental->id,
-                    'reference_type' => Rental::class,
-                    'description' => "Cobro por daños al recepcionar {$rental->code}",
-                ]);
-            }
+            $cash = app(CashService::class);
+
+            // La garantía vuelve al cliente; lo cobrado por daños es un ingreso aparte.
+            $cash->expense(CashMovement::ORIGIN_RENTAL_DEPOSIT, (float) $rental->deposit_amount, "Devolución de garantía {$rental->code}", $rental);
+            $cash->income(CashMovement::ORIGIN_PENALTY_FEE, $penaltyTotal, "Cobro por daños al recepcionar {$rental->code}", $rental, [
+                'payment_method' => $data['payment_method'] ?? null,
+            ]);
 
             return $rental;
         });

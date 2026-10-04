@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Supplier extends Model
 {
-    use BelongsToAccount, HasFactory, SoftDeletes;
+    use AuditsChanges, BelongsToAccount, HasFactory, SoftDeletes;
 
     protected $fillable = [
         'code',

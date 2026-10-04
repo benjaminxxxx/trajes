@@ -64,9 +64,12 @@ return [
 
         // Finanzas
         'finanzas.gastos' => 'Gastos operativos',
+        'caja.ver' => 'Ver la caja y sus movimientos',
+        'caja.registrar' => 'Registrar aportes, retiros y anulaciones en caja',
 
         // Seguridad
         'seguridad.usuarios' => 'Gestionar usuarios',
+        'auditoria.ver' => 'Ver la auditoría de ediciones y eliminaciones',
         'configuracion.general' => 'Configuración del sistema (desgaste de prendas)',
     ],
 

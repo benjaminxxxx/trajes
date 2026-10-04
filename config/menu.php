@@ -79,6 +79,7 @@ return [
         'label' => 'Finanzas',
         'icon' => 'banknotes',
         'items' => [
+            ['label' => 'Caja', 'icon' => 'banknotes', 'route' => 'finance.cash.index', 'permission' => 'caja.ver'],
             ['label' => 'Gastos operativos', 'icon' => 'receipt-percent', 'route' => 'finance.expenses.index', 'permission' => 'finanzas.gastos'],
         ],
     ],
@@ -88,6 +89,7 @@ return [
         'items' => [
             ['label' => 'Usuarios', 'icon' => 'user-group', 'route' => 'core.users.index', 'permission' => 'seguridad.usuarios'],
             ['label' => 'Configuración', 'icon' => 'adjustments-horizontal', 'route' => 'core.settings.index', 'permission' => 'configuracion.general'],
+            ['label' => 'Auditoría', 'icon' => 'shield-check', 'route' => 'core.audit.index', 'permission' => 'auditoria.ver'],
         ],
     ],
 ];

@@ -244,7 +244,9 @@ test('cancelling a rental releases its garments and refunds the deposit', functi
     expect($rental->status)->toBe(Rental::STATUS_CANCELLED)
         ->and($rental->trashed())->toBeFalse()
         ->and($unit->fresh()->status)->toBe('available')
-        ->and(CashMovement::where('reference_type', Rental::class)->where('type', CashMovement::TYPE_EXPENSE)->sum('amount'))->toEqual(50);
+        // Sale de caja lo cobrado: el alquiler (80) y la garantía (50).
+        ->and(CashMovement::where('reference_type', Rental::class)->where('type', CashMovement::TYPE_EXPENSE)->sum('amount'))->toEqual(130)
+        ->and(CashMovement::where('reference_type', Rental::class)->where('type', CashMovement::TYPE_INCOME)->sum('amount'))->toEqual(130);
 });
 
 test('a returned rental cannot be cancelled', function () {

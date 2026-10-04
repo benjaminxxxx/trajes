@@ -85,6 +85,7 @@ class SaleDetailModal extends Component
             'details.variant.size:id,name',
             'details.variant.color:id,name,hex_code',
             'details.physicalProduct:id,code',
+            'assetDeliveries.asset',
         ])->findOrFail($this->saleId);
     }
 

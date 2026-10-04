@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class PurchaseDetail extends Model
 {
-    use BelongsToAccount, HasFactory;
+    use AuditsChanges, BelongsToAccount, HasFactory;
 
     protected $fillable = [
         'purchase_id',
