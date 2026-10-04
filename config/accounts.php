@@ -17,4 +17,12 @@ return [
         fn (string $email) => strtolower(trim($email)),
         explode(',', (string) env('PLATFORM_ADMIN_EMAILS', '')),
     ))),
+
+    // A quién se avisa por correo cuando alguien crea su cuenta por primera
+    // vez (separados por coma). Sin valor, se avisa a los administradores de
+    // la plataforma.
+    'signup_notification_emails' => array_values(array_filter(array_map(
+        fn (string $email) => strtolower(trim($email)),
+        explode(',', (string) (env('SIGNUP_NOTIFICATION_EMAIL') ?: env('PLATFORM_ADMIN_EMAILS', ''))),
+    ))),
 ];

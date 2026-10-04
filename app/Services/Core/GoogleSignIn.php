@@ -3,6 +3,7 @@
 namespace App\Services\Core;
 
 use App\Models\User;
+use Illuminate\Auth\Events\Registered;
 use Illuminate\Support\Str;
 use Laravel\Socialite\Contracts\User as GoogleUser;
 
@@ -37,6 +38,8 @@ class GoogleSignIn
             $user->restore();
         }
 
+        $isNew = $user === null;
+
         $user ??= new User([
             'name' => $googleUser->getName() ?: Str::before($email, '@'),
             'email' => $email,
@@ -48,6 +51,11 @@ class GoogleSignIn
             'avatar' => $googleUser->getAvatar(),
             'email_verified_at' => $user->email_verified_at ?? now(),
         ])->save();
+
+        // Mismo evento que el registro con correo y contraseña (avisa al dueño de la plataforma).
+        if ($isNew) {
+            event(new Registered($user));
+        }
 
         return $user;
     }
