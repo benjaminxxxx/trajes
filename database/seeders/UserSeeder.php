@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Hash;
 /**
  * Dueño y vendedor de ejemplo, con el negocio de ejemplo del que son miembros.
  * Deja ese negocio como el actual para los seeders que vienen después.
+ * nuevo comentario
  */
 class UserSeeder extends Seeder
 {
