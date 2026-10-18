@@ -55,6 +55,14 @@ class Category extends Model
         return $this->belongsToMany(Color::class)->withTimestamps();
     }
 
+    /**
+     * Características que se piden en esta categoría (además de las generales).
+     */
+    public function characteristicAttributes(): BelongsToMany
+    {
+        return $this->belongsToMany(Attribute::class)->withTimestamps();
+    }
+
     public function products(): HasMany
     {
         return $this->hasMany(Product::class);

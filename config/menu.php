@@ -53,6 +53,7 @@ return [
             ['label' => 'Catálogo de productos', 'icon' => 'tag', 'route' => 'inventory.products.index', 'active' => ['inventory.products.*'], 'permission' => 'inventario.productos'],
             ['label' => 'Categorías', 'icon' => 'folder', 'route' => 'inventory.categories.index', 'permission' => 'inventario.categorias'],
             ['label' => 'Tallas, colores y marcas', 'icon' => 'swatch', 'route' => 'inventory.attributes.index', 'permission' => 'inventario.atributos'],
+            ['label' => 'Telas, cortes y más', 'icon' => 'adjustments-horizontal', 'route' => 'inventory.characteristics.index', 'permission' => 'inventario.atributos'],
             ['label' => 'Seguimiento de prendas', 'icon' => 'qr-code', 'route' => 'inventory.physical-items.index', 'permission' => 'inventario.seguimiento'],
             ['label' => 'Mantenimientos', 'icon' => 'wrench-screwdriver', 'route' => 'maintenance.history.index', 'permission' => 'mantenimiento.ver'],
             ['label' => 'Bienes del negocio', 'icon' => 'cube', 'route' => 'inventory.assets.index', 'permission' => 'inventario.bienes'],

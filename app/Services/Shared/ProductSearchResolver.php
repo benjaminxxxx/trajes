@@ -24,6 +24,7 @@ class ProductSearchResolver implements SearchResolver
                 badgeColor: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-950/60 dark:text-cyan-300',
                 meta: [
                     'price' => (float) $product->price,
+                    'purchase_price' => (float) $product->purchase_price,
                     'category_id' => $product->category_id,
                 ],
             ));

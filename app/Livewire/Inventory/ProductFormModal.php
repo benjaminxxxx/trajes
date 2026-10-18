@@ -10,6 +10,8 @@ use App\Services\Core\AccountRule;
 use App\Services\Inventory\ProductService;
 use Flux\Flux;
 use Illuminate\Contracts\View\View;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
@@ -20,9 +22,15 @@ use Livewire\WithFileUploads;
 
 /**
  * Alta y edición rápida de producto en un modal reutilizable (catálogo y
- * compras). Pide solo lo esencial; SKU, descripción, estado y ficha técnica
- * quedan en "Más opciones".
+ * compras). Pide solo lo esencial; SKU, descripción y estado quedan en
+ * "Más opciones".
  *
+ * - Un producto nuevo empieza por "¿Qué vas a registrar?": se elige la
+ *   categoría y se ven los productos que ya tiene, para comprar más de uno
+ *   existente en vez de duplicarlo. Si la categoría está vacía, va directo
+ *   al formulario.
+ * - Características (tela, corte, cuero...) se escriben con sugerencias y se
+ *   guardan como texto en el producto (ver ProductService::sincronizarCaracteristicas).
  * - Categoría y marca se escriben con sugerencias: si no existen, se crean.
  * - Las primeras fotos se suben aquí mismo: se guardan después de crear el
  *   producto (cuando ya hay id) y pasan por ProductImageOptimizer.
@@ -37,6 +45,14 @@ class ProductFormModal extends Component
     public const MAX_PHOTOS = 8;
 
     public bool $show = false;
+
+    // category: elegir qué se registra | products: los que ya existen | form
+    public string $step = 'form';
+
+    public ?int $chosenCategoryId = null;
+
+    // Búsqueda rápida en el paso de categorías ("¿ya lo tengo?").
+    public string $finder = '';
 
     public ?int $productId = null;
 
@@ -53,6 +69,9 @@ class ProductFormModal extends Component
     /** @var float|int|string */
     public $price = 0;
 
+    /** @var float|int|string */
+    public $purchase_price = 0;
+
     // Operatividad: both (alquiler y venta) | rental | sale
     public string $usage = 'both';
 
@@ -64,8 +83,10 @@ class ProductFormModal extends Component
 
     public bool $is_active = true;
 
-    /** @var array<int, int> */
-    public array $selectedAttributeValueIds = [];
+    /** @var array<int, array{attribute_id: ?int, name: string, value: string}> */
+    public array $characteristics = [];
+
+    public string $newCharacteristic = '';
 
     public bool $hasPhysicalItems = false;
 
@@ -83,7 +104,7 @@ class ProductFormModal extends Component
         $this->context = $context;
 
         if ($productId) {
-            $product = Product::with(['attributeValues:id', 'category:id,name', 'brand:id,name'])->findOrFail($productId);
+            $product = Product::with(['characteristics', 'category:id,name', 'brand:id,name'])->findOrFail($productId);
 
             $this->productId = $product->id;
             $this->name = $product->name;
@@ -91,6 +112,7 @@ class ProductFormModal extends Component
             $this->brand = (string) $product->brand?->name;
             $this->gender = $product->gender;
             $this->price = (float) $product->price;
+            $this->purchase_price = (float) $product->purchase_price;
             $this->usage = match (true) {
                 $product->allow_rental && ! $product->allow_sale => 'rental',
                 $product->allow_sale && ! $product->allow_rental => 'sale',
@@ -99,14 +121,122 @@ class ProductFormModal extends Component
             $this->code = $product->code;
             $this->description = $product->description;
             $this->is_active = $product->is_active;
-            $this->selectedAttributeValueIds = $product->attributeValues->pluck('id')->all();
+            $this->characteristics = $product->characteristics
+                ->map(fn ($characteristic) => $characteristic->only(['attribute_id', 'name', 'value']))
+                ->all();
             $this->hasPhysicalItems = $product->physicalProducts()->exists();
-            $this->moreOptions = filled($product->description) || ! $product->is_active || $this->selectedAttributeValueIds !== [];
+            $this->moreOptions = filled($product->description) || ! $product->is_active;
+            $this->refreshCharacteristicRows($product->category_id);
         } else {
             $this->code = 'PROD-'.strtoupper(Str::random(6));
+            // Sin categorías todavía no hay nada que elegir: directo al formulario.
+            $this->step = Category::where('is_active', true)->exists() ? 'category' : 'form';
+            $this->refreshCharacteristicRows(null);
         }
 
         $this->show = true;
+    }
+
+    public function chooseCategory(int $categoryId): void
+    {
+        $category = Category::where('is_active', true)->findOrFail($categoryId);
+        $this->chosenCategoryId = $category->id;
+
+        $category->products()->exists()
+            ? $this->step = 'products'
+            : $this->startNew($category->id);
+    }
+
+    /**
+     * Pasa al formulario de un producto nuevo, con la categoría ya puesta.
+     */
+    public function startNew(?int $categoryId = null): void
+    {
+        $this->category = (string) ($categoryId ? Category::find($categoryId)?->name : '');
+        $this->step = 'form';
+        $this->refreshCharacteristicRows($categoryId);
+    }
+
+    public function backToCategories(): void
+    {
+        $this->resetValidation();
+        $this->step = 'category';
+        $this->chosenCategoryId = null;
+    }
+
+    /**
+     * Ya existe: en compras se agrega a la compra; en el catálogo se abre
+     * una compra nueva con ese producto (el stock solo entra comprando).
+     */
+    public function useExisting(int $productId): void
+    {
+        $product = Product::findOrFail($productId);
+
+        if ($this->context === 'purchase') {
+            $this->show = false;
+            $this->dispatch('product-saved', productId: $product->id, context: $this->context, created: false);
+
+            return;
+        }
+
+        $this->authorize('compras.registrar');
+        $this->redirectRoute('purchasing.purchases.create', ['producto' => $product->id], navigate: true);
+    }
+
+    public function updatedCategory(): void
+    {
+        $this->refreshCharacteristicRows($this->resolvedCategoryId());
+    }
+
+    public function addCharacteristic(): void
+    {
+        $name = Str::squish($this->newCharacteristic);
+        $this->newCharacteristic = '';
+
+        if ($name === '') {
+            return;
+        }
+
+        $exists = collect($this->characteristics)->contains(fn (array $row) => Str::lower($row['name']) === Str::lower($name));
+
+        if (! $exists) {
+            $attribute = Attribute::whereRaw('LOWER(name) = ?', [Str::lower($name)])->first();
+            $this->characteristics[] = ['attribute_id' => $attribute?->id, 'name' => $attribute?->name ?? $name, 'value' => ''];
+        }
+    }
+
+    public function removeCharacteristic(int $index): void
+    {
+        unset($this->characteristics[$index]);
+        $this->characteristics = array_values($this->characteristics);
+    }
+
+    /**
+     * Filas de características: las que aplican a la categoría (vacías para
+     * llenar) más las que ya tienen valor o el usuario agregó a mano.
+     */
+    protected function refreshCharacteristicRows(?int $categoryId): void
+    {
+        $applicable = Attribute::forCategory($categoryId)->orderBy('name')->get(['id', 'name']);
+
+        $rows = collect($this->characteristics)->filter(fn (array $row) => filled($row['value'])
+            || $row['attribute_id'] === null
+            || $applicable->contains('id', $row['attribute_id']));
+
+        foreach ($applicable as $attribute) {
+            if (! $rows->contains(fn (array $row) => $row['attribute_id'] === $attribute->id || Str::lower($row['name']) === Str::lower($attribute->name))) {
+                $rows->push(['attribute_id' => $attribute->id, 'name' => $attribute->name, 'value' => '']);
+            }
+        }
+
+        $this->characteristics = $rows->values()->all();
+    }
+
+    protected function resolvedCategoryId(): ?int
+    {
+        $name = trim($this->category);
+
+        return $name === '' ? null : Category::where('slug', Str::slug($name))->value('id');
     }
 
     public function updatedPhotoUploads(): void
@@ -141,12 +271,15 @@ class ProductFormModal extends Component
             'brand' => ['nullable', 'string', 'max:255'],
             'gender' => ['required', 'in:masculino,femenino,unisex,nino'],
             'price' => ['required', 'numeric', 'min:0'],
+            'purchase_price' => ['nullable', 'numeric', 'min:0'],
             'usage' => ['required', 'in:both,rental,sale'],
             'code' => ['required', 'string', 'max:50', AccountRule::unique('products', 'code')->ignore($this->productId)],
             'description' => ['nullable', 'string'],
             'is_active' => ['boolean'],
-            'selectedAttributeValueIds' => ['array'],
-            'selectedAttributeValueIds.*' => [AccountRule::exists('attribute_values')],
+            'characteristics' => ['array'],
+            'characteristics.*.attribute_id' => ['nullable', 'integer'],
+            'characteristics.*.name' => ['required', 'string', 'max:60'],
+            'characteristics.*.value' => ['nullable', 'string', 'max:120'],
             'photos' => ['array', 'max:'.self::MAX_PHOTOS],
             'photos.*' => ['image', 'mimes:jpg,jpeg,png,webp', 'max:12288'],
         ];
@@ -160,7 +293,8 @@ class ProductFormModal extends Component
             'name' => 'nombre',
             'category' => 'categoría',
             'brand' => 'marca',
-            'price' => 'precio',
+            'price' => 'precio de venta',
+            'purchase_price' => 'precio de compra',
             'code' => 'código',
         ]);
 
@@ -169,11 +303,14 @@ class ProductFormModal extends Component
             'code' => $validated['code'],
             'description' => $validated['description'],
             'price' => $validated['price'],
+            'purchase_price' => (float) ($validated['purchase_price'] ?: 0),
             'gender' => $validated['gender'],
             'allow_rental' => $validated['usage'] !== 'sale',
             'allow_sale' => $validated['usage'] !== 'rental',
             'is_active' => $validated['is_active'],
-            'attribute_value_ids' => $validated['selectedAttributeValueIds'],
+            'characteristics' => $validated['characteristics'] ?? [],
+            // Lo nuevo que se escribió (una tela, un corte) queda como sugerencia.
+            'can_add_suggestions' => Gate::allows('inventario.atributos'),
         ];
 
         $isNew = $this->productId === null;
@@ -231,13 +368,70 @@ class ProductFormModal extends Component
         ];
     }
 
+    /**
+     * Productos de la lista del asistente, con lo necesario para reconocerlos.
+     */
+    protected function productCards(Builder $query): Collection
+    {
+        return $query->with(['primaryMedia', 'characteristics', 'brand:id,name'])
+            ->withSum('variants as stock_total', 'stock')
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->limit(30)
+            ->get();
+    }
+
+    /**
+     * Productos que coinciden con lo escrito (nombre, código o característica).
+     */
+    protected function matching(string $term, ?int $categoryId = null): Builder
+    {
+        $words = collect(preg_split('/\s+/', trim($term)))->filter(fn (string $word) => mb_strlen($word) >= 3);
+
+        return Product::query()
+            ->when($categoryId, fn (Builder $q) => $q->where('category_id', $categoryId))
+            ->where(function (Builder $q) use ($words, $term) {
+                $q->where('code', 'like', '%'.trim($term).'%')
+                    ->orWhere(function (Builder $q) use ($words) {
+                        foreach ($words as $word) {
+                            $q->where(fn (Builder $w) => $w->where('name', 'like', "%{$word}%")
+                                ->orWhereHas('characteristics', fn (Builder $c) => $c->where('value', 'like', "%{$word}%")));
+                        }
+                    });
+            });
+    }
+
     public function render(): View
     {
+        $isNew = $this->productId === null;
+        $categoryId = $this->step === 'form' ? $this->resolvedCategoryId() : $this->chosenCategoryId;
+
         return view('livewire.inventory.product-form-modal', [
             'maxPhotos' => self::MAX_PHOTOS,
             'categoryOptions' => $this->show ? Category::where('is_active', true)->orderBy('name')->pluck('name') : collect(),
             'brandOptions' => $this->show ? Brand::where('is_active', true)->orderBy('name')->pluck('name') : collect(),
-            'technicalAttributes' => $this->show && $this->moreOptions ? Attribute::with('values')->orderBy('name')->get() : collect(),
+            'chooserCategories' => $this->show && $this->step === 'category'
+                ? Category::where('is_active', true)->withCount('products')->orderByDesc('products_count')->orderBy('name')->get(['id', 'name'])
+                : collect(),
+            'finderResults' => $this->show && $this->step === 'category' && mb_strlen(trim($this->finder)) >= 2
+                ? $this->productCards($this->matching($this->finder)->with('category:id,name'))
+                : collect(),
+            'chosenCategory' => $this->step === 'products' ? Category::find($this->chosenCategoryId) : null,
+            'existingProducts' => $this->show && $this->step === 'products'
+                ? $this->productCards(Product::where('category_id', $this->chosenCategoryId))
+                : collect(),
+            // Aviso de posible duplicado mientras se escribe el nombre.
+            'similarProducts' => $this->show && $isNew && $this->step === 'form' && mb_strlen(trim($this->name)) >= 3
+                ? $this->productCards($this->matching($this->name, $categoryId))->take(3)
+                : collect(),
+            'suggestions' => $this->show && $this->step === 'form'
+                ? Attribute::with('values:id,attribute_id,value')
+                    ->whereKey(collect($this->characteristics)->pluck('attribute_id')->filter())
+                    ->get()->mapWithKeys(fn (Attribute $attribute) => [$attribute->id => $attribute->values->pluck('value')])
+                : collect(),
+            'characteristicNames' => $this->show && $this->step === 'form'
+                ? Attribute::active()->orderBy('name')->pluck('name')
+                : collect(),
         ]);
     }
 }

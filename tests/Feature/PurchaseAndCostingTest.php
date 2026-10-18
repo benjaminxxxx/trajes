@@ -1,10 +1,12 @@
 <?php
 
 use App\Livewire\Purchasing\PurchaseDetailModal;
+use App\Livewire\Purchasing\PurchaseForm;
 use App\Livewire\Rental\RentalForm;
 use App\Livewire\Sale\SaleForm;
 use App\Livewire\Shared\ProductGallery;
 use App\Livewire\Shared\ProductPicker;
+use App\Models\CashMovement;
 use App\Models\PhysicalProduct;
 use App\Models\Product;
 use App\Models\Purchase;
@@ -69,6 +71,94 @@ test('physical units copy the net unit cost of the purchase', function () {
     buy($product, 2, 100, discount: 10);
 
     expect(PhysicalProduct::pluck('purchase_cost')->map(fn ($cost) => (float) $cost)->all())->toBe([90.0, 90.0]);
+});
+
+test('a factura entered with IGV included splits the tax and costs units without it', function () {
+    $product = makeProduct(true);
+
+    $purchase = app(PurchaseService::class)->register(
+        ['document_type' => 'factura', 'prices_include_tax' => true, 'issue_date' => now()->toDateString()],
+        [['product_id' => $product->id, 'size_id' => null, 'color_id' => null, 'quantity' => 6, 'unit_price' => 70, 'discount_percent' => 0]],
+    );
+
+    expect((float) $purchase->total)->toEqual(420.0)
+        ->and((float) $purchase->subtotal)->toEqual(355.93)
+        ->and((float) $purchase->tax)->toEqual(64.07)
+        ->and((float) CashMovement::where('origin', CashMovement::ORIGIN_PURCHASE_EXPENSE)->sole()->amount)->toEqual(420.0)
+        ->and(PhysicalProduct::pluck('purchase_cost')->unique()->map(fn ($cost) => (float) $cost)->all())->toBe([59.32]);
+});
+
+test('a boleta entered with IGV included costs exactly what was paid', function () {
+    $product = makeProduct(false);
+
+    $purchase = app(PurchaseService::class)->register(
+        ['document_type' => 'boleta', 'prices_include_tax' => true, 'issue_date' => now()->toDateString()],
+        [['product_id' => $product->id, 'size_id' => null, 'color_id' => null, 'quantity' => 2, 'unit_price' => 118, 'discount_percent' => 0]],
+    );
+
+    expect((float) $purchase->total)->toEqual(236.0)
+        ->and((float) $product->variants()->first()->average_cost)->toEqual(118.0);
+});
+
+test('a draft purchase touches neither stock nor cash until it is confirmed', function () {
+    $product = makeProduct(true);
+    $service = app(PurchaseService::class);
+    $header = ['document_type' => 'factura', 'prices_include_tax' => true, 'document_total' => 420, 'issue_date' => now()->toDateString()];
+    $line = ['product_id' => $product->id, 'size_id' => null, 'color_id' => null, 'quantity' => 6, 'unit_price' => 70, 'discount_percent' => 0];
+
+    $draft = $service->saveDraft($header, [$line]);
+
+    expect($draft->isDraft())->toBeTrue()
+        ->and((float) $draft->total)->toEqual(420.0)
+        ->and($product->variants()->count())->toBe(0)
+        ->and(PhysicalProduct::count())->toBe(0)
+        ->and(CashMovement::count())->toBe(0);
+
+    $purchase = $service->register($header, [$line], $draft);
+
+    expect($purchase->id)->toBe($draft->id)
+        ->and($purchase->status)->toBe(Purchase::STATUS_COMPLETED)
+        ->and($purchase->draft_items)->toBeNull()
+        ->and($product->variants()->first()->stock)->toBe(6)
+        ->and((float) CashMovement::sole()->amount)->toEqual(420.0);
+
+    // Ya confirmada, no vuelve a ser borrador.
+    $service->saveDraft($header, [$line], $purchase);
+})->throws(RuntimeException::class, 'ya fue confirmada');
+
+test('the purchase form saves a draft, reopens it and confirms it', function () {
+    $product = makeProduct(false);
+    $product->update(['purchase_price' => 70]);
+
+    $form = Livewire::test(PurchaseForm::class)
+        ->call('addCreatedProduct', $product->id, 'purchase')
+        ->set('document_type', 'factura')
+        ->set('document_total', 140);
+
+    $key = array_key_first($form->get('items'));
+    $form->set("items.{$key}.quantity", 2)
+        ->assertSet('documentDifference', 0.0)
+        ->call('saveDraft')
+        ->assertHasNoErrors();
+
+    $draft = Purchase::sole();
+
+    expect($draft->isDraft())->toBeTrue()
+        ->and($form->get('draftId'))->toBe($draft->id)
+        ->and($product->variants()->count())->toBe(0);
+
+    Livewire::withQueryParams(['borrador' => $draft->id])
+        ->test(PurchaseForm::class)
+        ->assertSet('document_type', 'factura')
+        ->assertSet('prices_include_tax', true)
+        ->assertCount('items', 1)
+        ->call('save')
+        ->assertHasNoErrors()
+        ->assertSet('draftId', null);
+
+    expect($draft->fresh()->status)->toBe(Purchase::STATUS_COMPLETED)
+        ->and((float) $draft->fresh()->total)->toEqual(140.0)
+        ->and($product->variants()->first()->stock)->toBe(2);
 });
 
 test('variant average cost is weighted across purchases', function () {

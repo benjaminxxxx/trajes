@@ -145,9 +145,12 @@ class ProductCatalogSeeder extends Seeder
             'is_active' => true,
         ]);
 
-        $product->attributeValues()->sync(
-            AttributeValue::whereIn('value', $item['attributes'] ?? [])->pluck('id')
-        );
+        AttributeValue::with('attribute')->whereIn('value', $item['attributes'] ?? [])->get()
+            ->each(fn (AttributeValue $value) => $product->characteristics()->create([
+                'attribute_id' => $value->attribute_id,
+                'name' => $value->attribute->name,
+                'value' => $value->value,
+            ]));
 
         return $product;
     }
@@ -291,7 +294,7 @@ class ProductCatalogSeeder extends Seeder
                 'description' => 'Vestido largo strapless con drapeado en el busto y caída en raso.',
                 'colors' => ['Negro', 'Vino / Guinda'], 'sizes' => ['S', 'M', 'L'],
                 'cost' => 120, 'sale_price' => 329, 'rental_price' => 90, 'units_per_variant' => 2,
-                'attributes' => ['Raso / Satén'],
+                'attributes' => ['Satín'],
                 'images' => ['vestido-fiorela.jpg'],
             ],
             [
@@ -300,7 +303,7 @@ class ProductCatalogSeeder extends Seeder
                 'description' => 'Vestido de quinceañera strapless con falda amplia y bordados en pedrería.',
                 'colors' => ['Verde Esmeralda', 'Rosa Palo'], 'sizes' => ['S', 'M'],
                 'cost' => 260, 'sale_price' => 699, 'rental_price' => 180, 'units_per_variant' => 2,
-                'attributes' => ['Raso / Satén'],
+                'attributes' => ['Satín'],
                 'images' => ['vestido-quinceanera.jpg'],
             ],
             [
@@ -327,7 +330,7 @@ class ProductCatalogSeeder extends Seeder
                 'description' => 'Vestido midi de fiesta con escote en V y abertura lateral.',
                 'colors' => ['Rojo', 'Plateado'], 'sizes' => ['XS', 'S', 'M'],
                 'cost' => 110, 'sale_price' => 289, 'rental_price' => 80, 'units_per_variant' => 2,
-                'attributes' => ['Raso / Satén'],
+                'attributes' => ['Satín'],
                 'images' => [],
             ],
 
@@ -338,7 +341,7 @@ class ProductCatalogSeeder extends Seeder
                 'description' => 'Vestido de fiesta de falda amplia con puños de encaje.',
                 'colors' => ['Beige / Champán', 'Rosa Palo'], 'sizes' => ['4', '6', '8'],
                 'cost' => 65, 'sale_price' => 179, 'rental_price' => 45, 'units_per_variant' => 2,
-                'attributes' => ['Raso / Satén'],
+                'attributes' => ['Satín'],
                 'images' => ['vestido-nina-princesa.jpg'],
             ],
             [
@@ -356,7 +359,7 @@ class ProductCatalogSeeder extends Seeder
                 'description' => 'Vestido blanco de primera comunión con tul y corona de flores.',
                 'colors' => ['Blanco'], 'sizes' => ['6', '8', '10'],
                 'cost' => 80, 'sale_price' => 219, 'rental_price' => 55, 'units_per_variant' => 2,
-                'attributes' => ['Raso / Satén'],
+                'attributes' => ['Satín'],
                 'images' => [],
             ],
 

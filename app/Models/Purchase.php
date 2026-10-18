@@ -18,21 +18,39 @@ class Purchase extends Model
         'document_type',
         'document_number',
         'has_invoice_pending',
+        'prices_include_tax',
         'issue_date',
         'subtotal',
         'tax',
         'total',
+        'document_total',
         'status',
         'notes',
+        'draft_items',
     ];
 
     protected $casts = [
         'issue_date' => 'date',
         'has_invoice_pending' => 'boolean',
+        'prices_include_tax' => 'boolean',
         'subtotal' => 'decimal:2',
         'tax' => 'decimal:2',
         'total' => 'decimal:2',
+        'document_total' => 'decimal:2',
+        'draft_items' => 'array',
     ];
+
+    public const STATUS_DRAFT = 'draft';
+
+    public const STATUS_COMPLETED = 'completed';
+
+    /**
+     * Borrador: lo avanzado se guarda, pero aún no toca stock ni caja.
+     */
+    public function isDraft(): bool
+    {
+        return $this->status === self::STATUS_DRAFT;
+    }
 
     public function supplier(): BelongsTo
     {

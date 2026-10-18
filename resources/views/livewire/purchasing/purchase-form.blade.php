@@ -6,9 +6,15 @@
             </span>
             Nueva operación
         </div>
-        <h1 class="text-2xl font-semibold text-zinc-900 dark:text-white">Registrar compra</h1>
+        <h1 class="flex flex-wrap items-center gap-2 text-2xl font-semibold text-zinc-900 dark:text-white">
+            Registrar compra
+            @if ($draftId)
+                <flux:badge color="amber" size="sm">Borrador #{{ $draftId }}</flux:badge>
+            @endif
+        </h1>
         <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            Ingresa el comprobante y los productos que entrarán a tu inventario.
+            Ingresa el comprobante y los productos que entrarán a tu inventario. Si aún falta revisar tallas, colores o
+            el total, guárdalo como borrador: no afecta stock ni caja hasta que lo confirmes.
         </p>
     </div>
 
@@ -50,10 +56,29 @@
                     <flux:input wire:model="document_number" label="N.º de comprobante" placeholder="F001-0000123" />
 
                     <flux:input wire:model="issue_date" type="date" label="Fecha de emisión" />
+
+                    <flux:input wire:model.live.debounce.400ms="document_total" type="number" step="0.01" min="0"
+                        inputmode="decimal" label="Total del comprobante (S/)" placeholder="Ej: 5495.00"
+                        description="Opcional: el total impreso, para comprobar que lo registrado cuadra." />
                 </div>
 
                 <label
-                    class="mt-5 flex cursor-pointer items-center gap-3 rounded-xl border border-violet-100 bg-violet-50/70 p-3 dark:border-violet-900/50 dark:bg-violet-950/20">
+                    class="mt-5 flex cursor-pointer items-center gap-3 rounded-xl border border-zinc-200 p-3 dark:border-zinc-700">
+                    <flux:checkbox wire:model.live="prices_include_tax" />
+                    <span>
+                        <span class="block text-sm font-medium text-zinc-800 dark:text-zinc-200">Los precios ya incluyen IGV</span>
+                        <span class="text-xs text-zinc-500 dark:text-zinc-400">
+                            @if ($prices_include_tax)
+                                Escribe el precio tal como figura en el comprobante; el IGV se separa solo.
+                            @else
+                                Escribe el precio sin IGV; el 18% se agrega encima.
+                            @endif
+                        </span>
+                    </span>
+                </label>
+
+                <label
+                    class="mt-3 flex cursor-pointer items-center gap-3 rounded-xl border border-violet-100 bg-violet-50/70 p-3 dark:border-violet-900/50 dark:bg-violet-950/20">
                     <flux:checkbox wire:model="has_invoice_pending" />
                     <span>
                         <span class="block text-sm font-medium text-zinc-800 dark:text-zinc-200">Por facturar</span>
@@ -143,7 +168,8 @@
                                     </flux:select>
                                     <flux:input type="number" min="1" size="sm" label="Cantidad"
                                         wire:model.live="items.{{ $key }}.quantity" />
-                                    <flux:input type="number" step="0.01" size="sm" label="P. unitario"
+                                    <flux:input type="number" step="0.01" size="sm"
+                                        :label="$prices_include_tax ? 'P. unit. con IGV' : 'P. unit. sin IGV'"
                                         wire:model.live="items.{{ $key }}.unit_price" />
                                     <flux:input type="number" step="0.01" size="sm" label="Dcto. %"
                                         wire:model.live="items.{{ $key }}.discount_percent" />
@@ -162,27 +188,77 @@
 
             <div class="mt-6 flex flex-col gap-3 text-sm">
                 <div class="flex justify-between text-zinc-400">
-                    <span>Subtotal</span>
-                    <span class="font-semibold text-white">S/ {{ number_format($this->subtotal, 2) }}</span>
+                    <span>Op. gravada (sin IGV)</span>
+                    <span class="font-semibold text-white">S/ {{ number_format($this->totals['subtotal'], 2) }}</span>
                 </div>
                 <div class="flex justify-between text-zinc-400">
                     <span>IGV (18%)</span>
-                    <span class="font-semibold text-white">S/ {{ number_format($this->tax, 2) }}</span>
+                    <span class="font-semibold text-white">S/ {{ number_format($this->totals['tax'], 2) }}</span>
                 </div>
                 <div class="my-1 h-px bg-white/10"></div>
                 <div class="flex items-end justify-between">
                     <span class="text-zinc-300">Total compra</span>
-                    <strong class="text-2xl">S/ {{ number_format($this->total, 2) }}</strong>
+                    <strong class="text-2xl">S/ {{ number_format($this->totals['total'], 2) }}</strong>
                 </div>
+
+                @if ($this->documentDifference !== null)
+                    @if (abs($this->documentDifference) < 0.01)
+                        <p class="flex items-center gap-1.5 rounded-lg bg-emerald-500/15 px-3 py-2 text-xs text-emerald-300">
+                            <flux:icon icon="check-circle" class="size-4" />
+                            Cuadra con el comprobante.
+                        </p>
+                    @else
+                        <p class="flex items-start gap-1.5 rounded-lg bg-amber-500/15 px-3 py-2 text-xs text-amber-300">
+                            <flux:icon icon="exclamation-triangle" class="size-4 shrink-0" />
+                            <span>
+                                {{ $this->documentDifference > 0 ? 'Sobran' : 'Faltan' }}
+                                S/ {{ number_format(abs($this->documentDifference), 2) }} respecto al comprobante
+                                (S/ {{ number_format((float) $document_total, 2) }}).
+                            </span>
+                        </p>
+                    @endif
+                @endif
+
+                <div class="rounded-lg bg-white/5 px-3 py-2 text-xs leading-5 text-zinc-400">
+                    @if ($document_type === 'factura')
+                        Costo de inventario: <strong class="text-white">S/ {{ number_format($this->totals['subtotal'], 2) }}</strong>
+                        (sin IGV). Los S/ {{ number_format($this->totals['tax'], 2) }} de IGV son crédito fiscal.
+                    @else
+                        Costo de inventario: <strong class="text-white">S/ {{ number_format($this->totals['total'], 2) }}</strong>
+                        (sin factura el IGV no se recupera).
+                    @endif
+                    De caja salen S/ {{ number_format($this->totals['total'], 2) }}.
+                </div>
+
+                @if ($this->itemsWithoutVariant > 0)
+                    <p class="text-xs text-amber-300">
+                        {{ $this->itemsWithoutVariant }} fila(s) sin talla o color.
+                    </p>
+                @endif
             </div>
 
-            <flux:button type="submit" variant="primary" class="mt-6 w-full" icon="document-check">
-                <span wire:loading.remove wire:target="save">Registrar compra</span>
+            <flux:button type="submit" variant="primary" class="mt-6 w-full" icon="document-check"
+                wire:confirm="¿Confirmar la compra? Se actualizará el stock y saldrá de caja el total.">
+                <span wire:loading.remove wire:target="save">Confirmar compra</span>
                 <span wire:loading wire:target="save">Guardando...</span>
             </flux:button>
 
+            <flux:button type="button" wire:click="saveDraft" class="mt-2 w-full" icon="bookmark">
+                <span wire:loading.remove wire:target="saveDraft">{{ $draftId ? 'Actualizar borrador' : 'Guardar borrador' }}</span>
+                <span wire:loading wire:target="saveDraft">Guardando...</span>
+            </flux:button>
+
+            @if ($draftId)
+                <flux:button type="button" wire:click="deleteDraft" variant="ghost" size="sm" icon="trash"
+                    class="mt-2 w-full !text-red-400"
+                    wire:confirm="¿Eliminar este borrador? Se perderá lo registrado.">
+                    Eliminar borrador
+                </flux:button>
+            @endif
+
             <p class="mt-3 text-center text-[11px] leading-5 text-zinc-500">
-                Al guardar, el stock se actualiza por variante (talla + color) y el total sale de caja.
+                El borrador no toca stock ni caja. Al confirmar, el stock se actualiza por variante (talla + color) y el
+                total sale de caja.
             </p>
         </aside>
     </form>

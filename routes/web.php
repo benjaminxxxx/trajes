@@ -17,6 +17,7 @@ use App\Livewire\Finance\ExpenseIndex;
 use App\Livewire\Inventory\AssetIndex;
 use App\Livewire\Inventory\AttributeCatalog;
 use App\Livewire\Inventory\CategoryIndex;
+use App\Livewire\Inventory\CharacteristicCatalog;
 use App\Livewire\Inventory\CompanyValuation;
 use App\Livewire\Inventory\PhysicalItemTracker;
 use App\Livewire\Inventory\ProductIndex;
@@ -71,6 +72,8 @@ Route::middleware(['auth', 'verified', 'account'])->group(function () {
         Route::get('inventario/categorias', CategoryIndex::class)->name('inventory.categories.index');
     });
     Route::get('inventario/atributos', AttributeCatalog::class)->name('inventory.attributes.index')
+        ->middleware('can:inventario.atributos');
+    Route::get('inventario/caracteristicas', CharacteristicCatalog::class)->name('inventory.characteristics.index')
         ->middleware('can:inventario.atributos');
     Route::middleware('can:inventario.productos')->group(function () {
         Route::get('inventario/productos', ProductIndex::class)->name('inventory.products.index');

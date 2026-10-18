@@ -36,6 +36,7 @@ test('a product is created with a brand and category that did not exist yet', fu
         ->set('category', 'Ternos')
         ->set('brand', 'Gamarra Kings')
         ->set('price', 250)
+        ->set('purchase_price', 140)
         ->call('save')
         ->assertHasNoErrors()
         ->assertSet('show', false)
@@ -48,6 +49,8 @@ test('a product is created with a brand and category that did not exist yet', fu
         ->and($product->code)->toStartWith('PROD-')
         ->and($product->allow_rental)->toBeTrue()
         ->and($product->allow_sale)->toBeTrue()
+        ->and((float) $product->price)->toEqual(250.0)
+        ->and((float) $product->purchase_price)->toEqual(140.0)
         // La categoría nueva nace con las tallas y colores activos para poder comprar de inmediato.
         ->and($product->category->sizes->pluck('id')->all())->toBe([$size->id])
         ->and($product->category->sizes->pluck('id'))->not->toContain($inactiveSize->id)
@@ -225,7 +228,7 @@ test('the purchase form and the catalog embed the product modal', function () {
 
 test('a product created from the purchase form goes straight into the purchase lines', function () {
     $category = Category::create(['name' => 'Ternos', 'slug' => 'ternos']);
-    $product = Product::create(['category_id' => $category->id, 'code' => 'T-9', 'name' => 'Terno nuevo', 'slug' => 't-9', 'price' => 180]);
+    $product = Product::create(['category_id' => $category->id, 'code' => 'T-9', 'name' => 'Terno nuevo', 'slug' => 't-9', 'price' => 250, 'purchase_price' => 180]);
 
     $form = Livewire::test(PurchaseForm::class)
         ->call('addCreatedProduct', $product->id, 'purchase')

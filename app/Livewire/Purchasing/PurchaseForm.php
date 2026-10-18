@@ -4,6 +4,7 @@ namespace App\Livewire\Purchasing;
 
 use App\Models\Category;
 use App\Models\Product;
+use App\Models\Purchase;
 use App\Models\Supplier;
 use App\Services\Purchasing\PurchaseService;
 use Flux\Flux;
@@ -11,6 +12,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\On;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 
 class PurchaseForm extends Component
@@ -30,6 +32,17 @@ class PurchaseForm extends Component
 
     public ?string $notes = null;
 
+    // Los precios se escriben como figuran en el comprobante: casi siempre
+    // ya traen el IGV incluido.
+    public bool $prices_include_tax = true;
+
+    // Total impreso en el comprobante, para comprobar que lo registrado cuadra.
+    public float|string|null $document_total = null;
+
+    // Borrador en edición (se mantiene en la URL para poder retomarlo).
+    #[Url(as: 'borrador')]
+    public ?int $draftId = null;
+
     // Detalle: cada item es un array asociativo (no un modelo, es solo borrador)
     public array $items = [];
 
@@ -44,6 +57,39 @@ class PurchaseForm extends Component
     public function mount(): void
     {
         $this->issue_date = now()->toDateString();
+
+        if ($this->draftId) {
+            $this->loadDraft($this->draftId);
+        }
+
+        // "Comprar más" desde el catálogo: el producto ya entra a la compra.
+        if ($productId = request()->integer('producto')) {
+            $this->addCreatedProduct($productId, 'purchase');
+        }
+    }
+
+    protected function loadDraft(int $draftId): void
+    {
+        $draft = Purchase::with('supplier:id,display_name')->find($draftId);
+
+        if (! $draft?->isDraft()) {
+            $this->draftId = null;
+
+            return;
+        }
+
+        $this->supplier_id = $draft->supplier_id;
+        $this->supplier_name = $draft->supplier?->display_name;
+        $this->document_type = $draft->document_type;
+        $this->document_number = $draft->document_number;
+        $this->has_invoice_pending = $draft->has_invoice_pending;
+        $this->prices_include_tax = $draft->prices_include_tax;
+        $this->document_total = $draft->document_total === null ? null : (float) $draft->document_total;
+        $this->issue_date = $draft->issue_date?->toDateString();
+        $this->notes = $draft->notes;
+        $this->items = collect($draft->draft_items ?? [])
+            ->mapWithKeys(fn (array $item) => [(string) Str::uuid() => $item])
+            ->all();
     }
 
     #[On('entity-selected')]
@@ -86,7 +132,7 @@ class PurchaseForm extends Component
 
         if ($product) {
             $this->addProductToItems($product->id, $product->name, $product->code, [
-                'price' => (float) $product->price,
+                'purchase_price' => (float) $product->purchase_price,
                 'category_id' => $product->category_id,
             ]);
         }
@@ -125,7 +171,7 @@ class PurchaseForm extends Component
             'size_id' => null,
             'color_id' => null,
             'quantity' => 1,
-            'unit_price' => (float) ($meta['price'] ?? 0),
+            'unit_price' => (float) ($meta['purchase_price'] ?? 0),
             'discount_percent' => 0,
         ];
     }
@@ -212,59 +258,69 @@ class PurchaseForm extends Component
         return $this->categoryOptionsCache[$categoryId];
     }
 
+    /**
+     * @return array{subtotal: float, tax: float, total: float}
+     */
     #[Computed]
-    public function subtotal(): float
+    public function totals(): array
     {
-        return round(collect($this->items)->sum(
-            fn ($item) => $item['quantity'] * $item['unit_price'] * (1 - $item['discount_percent'] / 100)
-        ), 2);
+        $service = app(PurchaseService::class);
+
+        return $service->totals($service->linesAmount(array_values($this->items)), $this->prices_include_tax);
+    }
+
+    /**
+     * Total registrado menos el total del comprobante (0 = cuadra).
+     */
+    #[Computed]
+    public function documentDifference(): ?float
+    {
+        if (! is_numeric($this->document_total)) {
+            return null;
+        }
+
+        return round($this->totals['total'] - (float) $this->document_total, 2);
     }
 
     #[Computed]
-    public function tax(): float
+    public function itemsWithoutVariant(): int
     {
-        return round($this->subtotal * 0.18, 2);
+        return collect($this->items)->filter(fn (array $item) => blank($item['size_id']) || blank($item['color_id']))->count();
     }
 
-    #[Computed]
-    public function total(): float
+    /**
+     * Guarda lo avanzado sin tocar stock ni caja, para confirmarlo cuando se
+     * hayan revisado tallas, colores y el total contra el comprobante.
+     */
+    public function saveDraft(PurchaseService $service): void
     {
-        return round($this->subtotal + $this->tax, 2);
+        $this->authorize('compras.registrar');
+        $this->validate($this->validationRules(requireItems: false));
+
+        try {
+            $draft = $service->saveDraft($this->header(), $this->lines(), $this->currentDraft());
+        } catch (\RuntimeException $e) {
+            Flux::toast(variant: 'danger', text: $e->getMessage());
+
+            return;
+        }
+
+        $this->draftId = $draft->id;
+
+        Flux::toast(variant: 'success', text: "Borrador #{$draft->id} guardado. Aún no afecta stock ni caja.");
     }
 
     public function save(PurchaseService $service): void
     {
         $this->authorize('compras.registrar');
-
-        $this->validate([
-            'document_type' => 'required|in:nota_venta,boleta,factura',
-            'issue_date' => 'required|date',
-            'items' => 'required|array|min:1',
-        ], [
+        $this->validate($this->validationRules(requireItems: true), [
             'items.required' => 'Agrega al menos un producto a la compra.',
         ]);
 
         try {
-            $lines = array_map(function (array $item) {
-                $item['size_id'] = $item['size_id'] !== '' && $item['size_id'] !== null ? (int) $item['size_id'] : null;
-                $item['color_id'] = $item['color_id'] !== '' && $item['color_id'] !== null ? (int) $item['color_id'] : null;
+            $purchase = $service->register($this->header(), $this->lines(), $this->currentDraft());
 
-                return $item;
-            }, array_values($this->items));
-
-            $purchase = $service->register([
-                'supplier_id' => $this->supplier_id,
-                'document_type' => $this->document_type,
-                'document_number' => $this->document_number,
-                'has_invoice_pending' => $this->has_invoice_pending,
-                'issue_date' => $this->issue_date,
-                'notes' => $this->notes,
-            ], $lines);
-
-            $this->reset(['supplier_id', 'supplier_name', 'document_number', 'has_invoice_pending', 'notes', 'items']);
-            $this->document_type = 'nota_venta';
-            $this->issue_date = now()->toDateString();
-            $this->supplierPickerVersion++;
+            $this->resetForm();
 
             Flux::toast(variant: 'success', text: "Compra #{$purchase->id} registrada: S/ ".number_format((float) $purchase->total, 2).' salieron de caja.');
             $this->dispatch('purchaseSaved', purchaseId: $purchase->id);
@@ -272,6 +328,85 @@ class PurchaseForm extends Component
             report($th);
             Flux::toast(variant: 'danger', text: 'No se pudo registrar la compra: '.$th->getMessage());
         }
+    }
+
+    public function deleteDraft(PurchaseService $service): void
+    {
+        $this->authorize('compras.registrar');
+
+        if ($draft = $this->currentDraft()) {
+            try {
+                $service->deleteDraft($draft);
+            } catch (\RuntimeException $e) {
+                Flux::toast(variant: 'danger', text: $e->getMessage());
+
+                return;
+            }
+        }
+
+        $this->resetForm();
+        Flux::toast(text: 'Borrador eliminado.');
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function validationRules(bool $requireItems): array
+    {
+        return [
+            'document_type' => 'required|in:nota_venta,boleta,factura',
+            'issue_date' => 'required|date',
+            'document_total' => 'nullable|numeric|min:0',
+            'items' => $requireItems ? 'required|array|min:1' : 'array',
+            'items.*.quantity' => 'required|integer|min:1',
+            'items.*.unit_price' => 'required|numeric|min:0',
+            'items.*.discount_percent' => 'nullable|numeric|min:0|max:100',
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function header(): array
+    {
+        return [
+            'supplier_id' => $this->supplier_id,
+            'document_type' => $this->document_type,
+            'document_number' => $this->document_number,
+            'has_invoice_pending' => $this->has_invoice_pending,
+            'prices_include_tax' => $this->prices_include_tax,
+            'document_total' => is_numeric($this->document_total) ? round((float) $this->document_total, 2) : null,
+            'issue_date' => $this->issue_date,
+            'notes' => $this->notes,
+        ];
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    protected function lines(): array
+    {
+        return array_map(function (array $item) {
+            $item['size_id'] = filled($item['size_id']) ? (int) $item['size_id'] : null;
+            $item['color_id'] = filled($item['color_id']) ? (int) $item['color_id'] : null;
+            $item['discount_percent'] = (float) ($item['discount_percent'] ?: 0);
+
+            return $item;
+        }, array_values($this->items));
+    }
+
+    protected function currentDraft(): ?Purchase
+    {
+        return $this->draftId ? Purchase::find($this->draftId) : null;
+    }
+
+    protected function resetForm(): void
+    {
+        $this->reset(['supplier_id', 'supplier_name', 'document_number', 'has_invoice_pending', 'document_total', 'notes', 'items', 'draftId']);
+        $this->document_type = 'nota_venta';
+        $this->prices_include_tax = true;
+        $this->issue_date = now()->toDateString();
+        $this->supplierPickerVersion++;
     }
 
     public function render()

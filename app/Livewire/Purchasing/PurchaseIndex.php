@@ -35,8 +35,17 @@ class PurchaseIndex extends Component
         //
     }
 
+    /**
+     * Un borrador se retoma en el formulario; una compra confirmada se revisa en su detalle.
+     */
     public function openPurchase(int $id): void
     {
+        if (Purchase::find($id)?->isDraft()) {
+            $this->redirectRoute('purchasing.purchases.create', ['borrador' => $id], navigate: true);
+
+            return;
+        }
+
         $this->dispatch('open-purchase-detail', id: $id);
     }
 

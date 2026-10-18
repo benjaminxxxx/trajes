@@ -123,10 +123,11 @@ class ProductSeeder extends Seeder
                 }
             }
 
-            if (! empty($attributeValueIds)) {
-                // Pasa únicamente un array de IDs planos: [1, 5, 8]
-                $product->attributeValues()->sync($attributeValueIds);
-            }
+            AttributeValue::with('attribute')->whereKey($attributeValueIds)->get()
+                ->each(fn (AttributeValue $value) => $product->characteristics()->firstOrCreate(
+                    ['name' => $value->attribute->name],
+                    ['attribute_id' => $value->attribute_id, 'value' => $value->value],
+                ));
             // 3. Insertar Galería de Imágenes (product_media)
             if (isset($item['images'])) {
                 foreach ($item['images'] as $img) {

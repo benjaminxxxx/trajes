@@ -202,19 +202,33 @@ class CategoryAndAttributeSeeder extends Seeder
             Brand::create(['name' => $brand, 'slug' => Str::slug($brand)]);
         }
 
+        // Características que se piden al registrar el producto (solo sugerencias:
+        // el producto guarda el texto). Sin categorías = se piden en todas.
+        $clothing = ['Ternos y Esmóquines', 'Vestidos de Dama', 'Trajes de Niño', 'Vestidos de Niña', 'Ropa Blanca y Camisas'];
+        $shoes = ['Calzado de Varón', 'Calzado de Dama', 'Calzado Infantil'];
+
         $attributes = [
             [
-                'name' => 'Material / Tela',
-                'values' => ['100% Lana', 'Lana Poliéster (Barrington)', 'Seda', 'Raso / Satén', 'Terciopelo / Velvet', 'Algodón'],
+                'name' => 'Tela',
+                'categories' => $clothing,
+                'values' => ['100% Lana', 'Lana Poliéster (Barrington)', 'Seda', 'Satín', 'Terciopelo / Velvet', 'Algodón', 'Gasa', 'Tul'],
             ],
             [
-                'name' => 'Corte / Fit',
-                'values' => ['Slim Fit', 'Super Slim Fit', 'Clásico / Regular'],
+                'name' => 'Corte',
+                'categories' => $clothing,
+                'values' => ['Slim Fit', 'Super Slim Fit', 'Clásico / Regular', 'Sesgo', 'Sirena', 'Princesa'],
+            ],
+            [
+                'name' => 'Cuero',
+                'categories' => $shoes,
+                'values' => ['Cuero liso', 'Charol', 'Gamuza', 'Sintético'],
             ],
         ];
 
         foreach ($attributes as $attr) {
             $attribute = Attribute::create(['name' => $attr['name']]);
+            $attribute->categories()->sync(Category::whereIn('name', $attr['categories'])->pluck('id'));
+
             foreach ($attr['values'] as $val) {
                 AttributeValue::create([
                     'attribute_id' => $attribute->id,

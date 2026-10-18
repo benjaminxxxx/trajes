@@ -2,6 +2,7 @@
 
 namespace App\Services\Inventory;
 
+use App\Models\Attribute;
 use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Color;
@@ -160,13 +161,13 @@ class ProductService
         return DB::transaction(function () use ($data) {
             $data['slug'] = Str::slug($data['name'].'-'.Str::random(5));
 
-            $attributeValueIds = $data['attribute_value_ids'] ?? [];
-            unset($data['attribute_value_ids']);
+            [$characteristics, $canSuggest] = [$data['characteristics'] ?? null, (bool) ($data['can_add_suggestions'] ?? false)];
+            unset($data['characteristics'], $data['can_add_suggestions']);
 
             $product = Product::create($data);
 
-            if (! empty($attributeValueIds)) {
-                $product->attributeValues()->sync($attributeValueIds);
+            if (is_array($characteristics)) {
+                $this->sincronizarCaracteristicas($product, $characteristics, $canSuggest);
             }
 
             return $product;
@@ -190,17 +191,92 @@ class ProductService
                 $data['slug'] = Str::slug($data['name'].'-'.Str::random(5));
             }
 
-            $attributeValueIds = $data['attribute_value_ids'] ?? null;
-            unset($data['attribute_value_ids']);
+            [$characteristics, $canSuggest] = [$data['characteristics'] ?? null, (bool) ($data['can_add_suggestions'] ?? false)];
+            unset($data['characteristics'], $data['can_add_suggestions']);
 
             $product->update($data);
 
-            if (is_array($attributeValueIds)) {
-                $product->attributeValues()->sync($attributeValueIds);
+            if (is_array($characteristics)) {
+                $this->sincronizarCaracteristicas($product, $characteristics, $canSuggest);
             }
 
             return $product;
         });
+    }
+
+    /**
+     * Guarda las características del producto como texto. Con
+     * `$canAddSuggestions`, lo que se escribió por primera vez (una tela nueva,
+     * una característica nueva) queda como sugerencia para los siguientes
+     * productos; sin permiso, el producto lo guarda igual pero no se sugiere.
+     *
+     * @param  array<int, array{attribute_id?: ?int, name: string, value: ?string}>  $rows
+     */
+    public function sincronizarCaracteristicas(Product $product, array $rows, bool $canAddSuggestions = false): void
+    {
+        $kept = [];
+
+        foreach ($rows as $row) {
+            $name = Str::squish((string) ($row['name'] ?? ''));
+            $value = Str::squish((string) ($row['value'] ?? ''));
+
+            if ($name === '' || $value === '') {
+                continue;
+            }
+
+            $attribute = $this->resolverCaracteristica($row['attribute_id'] ?? null, $name, $product->category_id, $canAddSuggestions);
+            $name = $attribute?->name ?? $name;
+            $key = Str::lower($name);
+
+            if (isset($kept[$key])) {
+                continue;
+            }
+
+            if ($attribute && $canAddSuggestions
+                && ! $attribute->values()->whereRaw('LOWER(value) = ?', [Str::lower($value)])->exists()) {
+                $attribute->values()->create(['value' => $value]);
+            }
+
+            $kept[$key] = ['attribute_id' => $attribute?->id, 'name' => $name, 'value' => $value];
+        }
+
+        $existing = $product->characteristics()->get()->keyBy(fn ($characteristic) => Str::lower($characteristic->name));
+
+        foreach ($existing as $key => $characteristic) {
+            if (! isset($kept[$key])) {
+                $characteristic->delete();
+            }
+        }
+
+        foreach ($kept as $key => $attributes) {
+            isset($existing[$key])
+                ? $existing[$key]->update($attributes)
+                : $product->characteristics()->create($attributes);
+        }
+
+        $product->unsetRelation('characteristics');
+    }
+
+    /**
+     * Característica del catálogo por id o por nombre. Si no existe y se puede
+     * sugerir, se crea vinculada a la categoría del producto.
+     */
+    protected function resolverCaracteristica(?int $attributeId, string $name, ?int $categoryId, bool $canCreate): ?Attribute
+    {
+        $attribute = ($attributeId ? Attribute::find($attributeId) : null)
+            ?? Attribute::whereRaw('LOWER(name) = ?', [Str::lower($name)])->first();
+
+        if ($attribute || ! $canCreate) {
+            return $attribute;
+        }
+
+        $attribute = Attribute::create(['name' => $name]);
+
+        if ($categoryId) {
+            $attribute->categories()->attach($categoryId);
+        }
+
+        return $attribute;
     }
 
     /**

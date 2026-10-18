@@ -36,7 +36,7 @@ const PLATFORM_TABLES = [
 /**
  * Pivotes entre dos modelos del mismo negocio: se filtran a través de ellos.
  */
-const PIVOT_TABLES = ['asset_category', 'category_color', 'category_size', 'product_attribute_values'];
+const PIVOT_TABLES = ['asset_category', 'attribute_category', 'category_color', 'category_size'];
 
 /**
  * Modelos que no llevan el filtro por negocio, con su motivo.

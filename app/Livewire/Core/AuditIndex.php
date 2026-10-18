@@ -27,7 +27,7 @@ class AuditIndex extends Component
      * Nombres legibles de los campos más comunes (el resto se muestra tal cual).
      */
     public const FIELD_LABELS = [
-        'name' => 'Nombre', 'code' => 'Código', 'price' => 'Precio', 'sale_price' => 'Precio de venta',
+        'name' => 'Nombre', 'code' => 'Código', 'price' => 'Precio de venta', 'purchase_price' => 'Precio de compra', 'sale_price' => 'Precio de venta',
         'rental_price' => 'Precio de alquiler', 'amount' => 'Monto', 'total' => 'Total', 'subtotal' => 'Subtotal',
         'tax' => 'IGV', 'status' => 'Estado', 'notes' => 'Notas', 'description' => 'Descripción',
         'category' => 'Categoría', 'concept' => 'Concepto', 'expense_date' => 'Fecha del gasto',

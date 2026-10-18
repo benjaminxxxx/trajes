@@ -17,7 +17,7 @@
     <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:flex lg:items-center">
         <flux:input
             wire:model.live.debounce.300ms="search"
-            placeholder="Buscar por nombre o código..."
+            placeholder="Buscar por nombre, código o tela..."
             icon="magnifying-glass"
             class="w-full lg:max-w-xs"
         />
@@ -59,6 +59,9 @@
                         </div>
                         
                         <h4 class="font-semibold text-zinc-900 dark:text-white">{{ $product->name }}</h4>
+                        @if ($summary = $product->characteristicsSummary())
+                            <div class="text-xs text-violet-600 dark:text-violet-400">{{ $summary }}</div>
+                        @endif
                         
                         <div class="text-xs text-zinc-500 dark:text-zinc-400">
                             {{ $product->category?->name ?? 'Sin categoría' }} • <span class="capitalize">{{ $product->gender }}</span>
@@ -120,7 +123,7 @@
                 <flux:table.column>Nombre</flux:table.column>
                 <flux:table.column>Categoría/Marca</flux:table.column>
                 <flux:table.column>Género</flux:table.column>
-                <flux:table.column>Precio Base</flux:table.column>
+                <flux:table.column>Precio venta</flux:table.column>
                 <flux:table.column>Estado</flux:table.column>
                 <flux:table.column class="text-right">Acciones</flux:table.column>
             </flux:table.columns>
@@ -145,6 +148,9 @@
 
                         <flux:table.cell class="font-medium text-zinc-900 dark:text-white">
                             {{ $product->name }}
+                            @if ($summary = $product->characteristicsSummary())
+                                <div class="text-xs font-normal text-violet-600 dark:text-violet-400">{{ $summary }}</div>
+                            @endif
                         </flux:table.cell>
 
                         <flux:table.cell class="text-zinc-500 dark:text-zinc-400">

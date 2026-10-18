@@ -78,6 +78,7 @@ class ProductIndex extends Component
             ->with([
                 'category:id,name',
                 'brand:id,name',
+                'characteristics',
                 'media' => fn ($q) => $q->where('is_primary', true),
             ])
             ->withCount('physicalProducts')
@@ -86,7 +87,8 @@ class ProductIndex extends Component
             ->when($this->search !== '', function ($q) {
                 $q->where(function ($sub) {
                     $sub->where('name', 'like', "%{$this->search}%")
-                        ->orWhere('code', 'like', "%{$this->search}%");
+                        ->orWhere('code', 'like', "%{$this->search}%")
+                        ->orWhereHas('characteristics', fn ($c) => $c->where('value', 'like', "%{$this->search}%"));
                 });
             })
             ->orderBy('name')

@@ -56,7 +56,12 @@
                 @forelse ($purchases as $purchase)
                     <tr wire:key="purchase-{{ $purchase->id }}" wire:click="openPurchase({{ $purchase->id }})"
                         class="cursor-pointer transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/40">
-                        <td class="px-4 py-3 font-medium text-zinc-900 dark:text-white">#{{ $purchase->id }}</td>
+                        <td class="px-4 py-3 font-medium text-zinc-900 dark:text-white">
+                            #{{ $purchase->id }}
+                            @if ($purchase->isDraft())
+                                <flux:badge size="sm" color="zinc" class="ml-1">Borrador</flux:badge>
+                            @endif
+                        </td>
                         <td class="px-4 py-3 text-zinc-600 dark:text-zinc-300">{{ $purchase->issue_date?->format('d/m/Y') }}</td>
                         <td class="px-4 py-3">
                             <p class="text-zinc-800 dark:text-zinc-200">{{ $purchase->supplier?->display_name ?? 'Sin proveedor' }}</p>
@@ -76,7 +81,7 @@
                             </div>
                         </td>
                         <td class="px-4 py-3 text-zinc-600 dark:text-zinc-300">{{ $purchase->user?->name ?? '—' }}</td>
-                        <td class="px-4 py-3 text-right tabular-nums">{{ (int) $purchase->units_count }}</td>
+                        <td class="px-4 py-3 text-right tabular-nums">{{ $purchase->isDraft() ? (int) collect($purchase->draft_items)->sum('quantity') : (int) $purchase->units_count }}</td>
                         <td class="px-4 py-3 text-right font-semibold tabular-nums text-zinc-900 dark:text-white">
                             S/ {{ number_format($purchase->total, 2) }}</td>
                     </tr>

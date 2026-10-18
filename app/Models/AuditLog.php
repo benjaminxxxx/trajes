@@ -27,10 +27,12 @@ class AuditLog extends Model
     public const MODEL_LABELS = [
         Product::class => 'Producto',
         ProductVariant::class => 'Variante de producto',
+        ProductCharacteristic::class => 'Característica de producto',
         Category::class => 'Categoría',
         Brand::class => 'Marca',
         Size::class => 'Talla',
         Color::class => 'Color',
+        Attribute::class => 'Característica',
         Client::class => 'Cliente',
         Supplier::class => 'Proveedor',
         Purchase::class => 'Compra',

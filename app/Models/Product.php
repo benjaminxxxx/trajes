@@ -5,7 +5,6 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -23,6 +22,7 @@ class Product extends Model
         'slug',
         'description',
         'price',
+        'purchase_price',
         'gender',
         'allow_sale',
         'allow_rental',
@@ -31,6 +31,7 @@ class Product extends Model
 
     protected $casts = [
         'price' => 'decimal:2',
+        'purchase_price' => 'decimal:2',
         'allow_sale' => 'boolean',
         'allow_rental' => 'boolean',
         'is_active' => 'boolean',
@@ -75,12 +76,19 @@ class Product extends Model
     }
 
     /**
-     * Atributos de ficha técnica asociados al producto (Corte, Solapa, Mantenimiento, etc.).
+     * Características en texto (Tela: Satín, Corte: Sesgo...).
      */
-    public function attributeValues(): BelongsToMany
+    public function characteristics(): HasMany
     {
-        return $this->belongsToMany(AttributeValue::class, 'product_attribute_values')
-            ->withTimestamps();
+        return $this->hasMany(ProductCharacteristic::class)->orderBy('id');
+    }
+
+    /**
+     * Resumen corto para distinguir productos parecidos: "Satín · Sesgo".
+     */
+    public function characteristicsSummary(): string
+    {
+        return $this->characteristics->pluck('value')->filter()->implode(' · ');
     }
 
     /**
