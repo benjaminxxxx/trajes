@@ -20,4 +20,12 @@ return [
     'receipt_link_days' => (int) env('BUSINESS_RECEIPT_LINK_DAYS', 30),
 
     'receipt_footer' => env('BUSINESS_RECEIPT_FOOTER', 'Gracias por su preferencia.'),
+
+    // Peso máximo por archivo en la galería de productos (MB). Las fotos se
+    // reducen al guardarse; los videos se guardan tal cual. El servidor debe
+    // aceptar al menos el mayor de los dos (upload_max_filesize y post_max_size).
+    'media' => [
+        'max_photo_mb' => (int) env('MEDIA_MAX_PHOTO_MB', 12),
+        'max_video_mb' => (int) env('MEDIA_MAX_VIDEO_MB', 150),
+    ],
 ];

@@ -2,12 +2,15 @@
 
 use App\Livewire\Inventory\CharacteristicCatalog;
 use App\Livewire\Inventory\ProductFormModal;
+use App\Livewire\Inventory\ProductMediaManager;
 use App\Livewire\Purchasing\PurchaseForm;
 use App\Models\Attribute;
 use App\Models\Category;
 use App\Models\Product;
 use App\Services\Inventory\ProductService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 
 uses(RefreshDatabase::class);
@@ -189,4 +192,29 @@ test('the characteristics catalog manages names, categories and suggestions', fu
         ->and($leather->values()->pluck('value')->all())->toBe(['Charol']);
 
     $this->actingAs(createSeller())->get(route('inventory.characteristics.index'))->assertForbidden();
+});
+
+// ---------------- Galería: límites de fotos y videos ----------------
+
+test('the gallery accepts videos larger than photos and rejects what exceeds its limit', function () {
+    Storage::fake('public');
+    config(['business.media.max_photo_mb' => 1, 'business.media.max_video_mb' => 3]);
+    $product = productNamed($this->suits, 'Vestido Estrella');
+
+    Livewire::test(ProductMediaManager::class)
+        ->call('open', $product->id)
+        ->set('newFiles', [UploadedFile::fake()->create('vestido estrella.mp4', 2 * 1024, 'video/mp4')])
+        ->call('uploadMedia')
+        ->assertHasNoErrors();
+
+    expect($product->media()->where('file_type', 'video')->count())->toBe(1);
+
+    Livewire::test(ProductMediaManager::class)
+        ->call('open', $product->id)
+        ->set('newFiles', [UploadedFile::fake()->create('vestido grande.mp4', 4 * 1024, 'video/mp4')])
+        ->call('uploadMedia')
+        ->assertHasErrors('newFiles.0')
+        ->assertSee('«vestido grande.mp4» pesa 4.0 MB');
+
+    expect($product->media()->count())->toBe(1);
 });

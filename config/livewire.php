@@ -130,7 +130,9 @@ return [
 
     'temporary_file_upload' => [
         'disk' => env('LIVEWIRE_TEMPORARY_FILE_UPLOAD_DISK'), // Example: 'local', 's3'             | Default: 'default'
-        'rules' => null,                                      // Example: ['file', 'mimes:png,jpg'] | Default: ['required', 'file', 'max:12288'] (12MB)
+        // Tope general de cualquier subida (el mayor entre foto y video de la
+        // galería); cada formulario valida después su propio límite.
+        'rules' => ['required', 'file', 'max:'.max((int) env('MEDIA_MAX_PHOTO_MB', 12), (int) env('MEDIA_MAX_VIDEO_MB', 150)) * 1024],
         'directory' => null,                                  // Example: 'tmp'                     | Default: 'livewire-tmp'
         'middleware' => null,                                 // Example: 'throttle:5,1'            | Default: 'throttle:60,1'
         'preview_mimes' => [                                  // Supported file types for temporary pre-signed file URLs...
@@ -138,7 +140,7 @@ return [
             'mov', 'avi', 'wmv', 'mp3', 'm4a',
             'jpg', 'jpeg', 'mpga', 'webp', 'wma',
         ],
-        'max_upload_time' => 5, // Max duration (in minutes) before an upload is invalidated...
+        'max_upload_time' => 15, // Max duration (in minutes) before an upload is invalidated... (videos pesados con internet lento)
         'cleanup' => true, // Should cleanup temporary uploads older than 24 hrs...
     ],
 

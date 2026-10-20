@@ -12,8 +12,54 @@
         <!-- Zona de Carga -->
         <form wire:submit="uploadMedia" class="rounded-xl border border-dashed border-zinc-300 p-4 dark:border-zinc-700 bg-zinc-50/50 dark:bg-zinc-900/50 space-y-4">
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div>
-                    <flux:input label="Seleccionar Fotos/Videos" type="file" wire:model="newFiles" multiple />
+                {{-- Revisa el peso en el navegador: un video de 200 MB no debe subir entero para recién ser rechazado. --}}
+                <div x-data="{
+                        progress: null,
+                        tooBig: [],
+                        check(event) {
+                            const limits = { photo: {{ $maxPhotoMb }}, video: {{ $maxVideoMb }} };
+                            this.tooBig = [...event.target.files]
+                                .filter(file => file.size > (file.type.startsWith('video/') ? limits.video : limits.photo) * 1024 * 1024)
+                                .map(file => `«${file.name}» pesa ${(file.size / 1024 / 1024).toFixed(1)} MB`);
+
+                            if (this.tooBig.length) {
+                                event.target.value = '';
+                                event.stopImmediatePropagation();
+                            }
+                        },
+                    }"
+                    x-on:livewire-upload-start="progress = 0"
+                    x-on:livewire-upload-progress="progress = $event.detail.progress"
+                    x-on:livewire-upload-finish="progress = null"
+                    x-on:livewire-upload-error="progress = null"
+                    x-on:livewire-upload-cancel="progress = null">
+                    <flux:field>
+                        <flux:label>Seleccionar fotos o videos</flux:label>
+                        <input type="file" wire:model="newFiles" multiple accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime"
+                            x-on:change.capture="check($event)"
+                            class="block w-full text-sm text-zinc-600 file:mr-3 file:rounded-lg file:border-0 file:bg-violet-50 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-violet-700 hover:file:bg-violet-100 dark:text-zinc-300 dark:file:bg-violet-950/50 dark:file:text-violet-300" />
+                        <flux:description>Fotos hasta {{ $maxPhotoMb }} MB · videos hasta {{ $maxVideoMb }} MB.</flux:description>
+                    </flux:field>
+
+                    <template x-if="tooBig.length">
+                        <div class="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-950/40 dark:text-red-300">
+                            <p class="font-semibold">No se subió nada: estos archivos superan el límite.</p>
+                            <template x-for="line in tooBig"><p x-text="line"></p></template>
+                            <p class="mt-1">Compártelo desde el celular en calidad 720p o comprímelo y vuelve a intentarlo.</p>
+                        </div>
+                    </template>
+
+                    <div x-show="progress !== null" x-cloak class="mt-2">
+                        <div class="h-1.5 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
+                            <div class="h-full bg-violet-600 transition-all" x-bind:style="`width: ${progress}%`"></div>
+                        </div>
+                        <p class="mt-1 text-[11px] text-zinc-500">Subiendo <span x-text="progress"></span>%… no cierres esta ventana.</p>
+                    </div>
+
+                    <flux:error name="newFiles" />
+                    @foreach ($errors->get('newFiles.*') as $messages)
+                        <p class="mt-1 text-xs text-red-600 dark:text-red-400">{{ $messages[0] }}</p>
+                    @endforeach
                 </div>
 
                 <div>

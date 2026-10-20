@@ -37,8 +37,12 @@ class ProductMediaManager extends Component
     public function uploadMedia(ProductService $service): void
     {
         $this->validate([
-            'newFiles.*' => 'required|file|mimes:jpg,jpeg,png,webp,mp4,mov|max:20480', // Max 20MB por archivo
+            'newFiles' => ['required', 'array'],
+            'newFiles.*' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,mp4,mov', $this->sizeLimit(...)],
             'colorId' => ['nullable', AccountRule::exists('colors')],
+        ], [
+            'newFiles.required' => 'Elige al menos una foto o video.',
+            'newFiles.*.mimes' => 'Solo se aceptan fotos (JPG, PNG, WEBP) o videos (MP4, MOV).',
         ]);
 
         $product = Product::findOrFail($this->productId);
@@ -54,6 +58,28 @@ class ProductMediaManager extends Component
 
         $this->reset(['newFiles', 'colorId', 'isPrimary']);
         session()->flash('media_success', 'Archivos subidos con éxito.');
+    }
+
+    /**
+     * Fotos y videos tienen límites distintos (ver business.media).
+     */
+    protected function sizeLimit(string $attribute, mixed $file, \Closure $fail): void
+    {
+        if (! $file instanceof TemporaryUploadedFile) {
+            return;
+        }
+
+        $isVideo = str_starts_with((string) $file->getMimeType(), 'video/');
+        $maxMb = $isVideo ? config('business.media.max_video_mb') : config('business.media.max_photo_mb');
+
+        if ($file->getSize() > $maxMb * 1024 * 1024) {
+            $fail(sprintf('«%s» pesa %s MB: %s hasta %d MB.',
+                $file->getClientOriginalName(),
+                number_format($file->getSize() / 1024 / 1024, 1),
+                $isVideo ? 'los videos pueden pesar' : 'las fotos pueden pesar',
+                $maxMb,
+            ));
+        }
     }
 
     public function deleteMedia(int $mediaId, ProductService $service): void
@@ -77,6 +103,8 @@ class ProductMediaManager extends Component
         return view('livewire.inventory.product-media-manager', [
             'product' => $product,
             'colors' => Color::orderBy('name')->get(['id', 'name']),
+            'maxPhotoMb' => config('business.media.max_photo_mb'),
+            'maxVideoMb' => config('business.media.max_video_mb'),
         ]);
     }
 }
