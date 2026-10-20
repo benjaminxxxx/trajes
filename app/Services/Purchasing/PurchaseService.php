@@ -43,7 +43,7 @@ class PurchaseService
     {
         return DB::transaction(function () use ($header, $lines, $draft) {
             $attributes = $this->headerAttributes($header)
-                + $this->totals($this->linesAmount($lines), (bool) ($header['prices_include_tax'] ?? false))
+                + $this->totals($this->lineAmounts($lines), (bool) ($header['prices_include_tax'] ?? false), $this->documentTax($header))
                 + ['status' => Purchase::STATUS_DRAFT, 'draft_items' => array_values($lines)];
 
             if ($draft) {
@@ -73,8 +73,10 @@ class PurchaseService
                 throw new \RuntimeException('Agrega al menos un producto a la compra.');
             }
 
+            $this->ensureDocumentTaxMatches($header, $lines);
+
             $attributes = $this->headerAttributes($header)
-                + $this->totals($this->linesAmount($lines), (bool) ($header['prices_include_tax'] ?? false))
+                + $this->totals($this->lineAmounts($lines), (bool) ($header['prices_include_tax'] ?? false), $this->documentTax($header))
                 + ['status' => Purchase::STATUS_COMPLETED, 'draft_items' => null];
 
             if ($draft) {
@@ -115,9 +117,37 @@ class PurchaseService
             'has_invoice_pending' => $header['has_invoice_pending'] ?? false,
             'prices_include_tax' => (bool) ($header['prices_include_tax'] ?? false),
             'document_total' => $header['document_total'] ?? null,
+            'document_tax' => $this->documentTax($header),
             'issue_date' => $header['issue_date'],
             'notes' => $header['notes'] ?? null,
         ];
+    }
+
+    protected function documentTax(array $header): ?float
+    {
+        return is_numeric($header['document_tax'] ?? null) ? round((float) $header['document_tax'], 2) : null;
+    }
+
+    /**
+     * El IGV del comprobante solo corrige redondeos: si difiere más, las
+     * líneas registradas no son las de la factura y no se confirma así.
+     */
+    protected function ensureDocumentTaxMatches(array $header, array $lines): void
+    {
+        $documentTax = $this->documentTax($header);
+
+        if ($documentTax === null) {
+            return;
+        }
+
+        $computed = $this->totals($this->lineAmounts($lines), (bool) ($header['prices_include_tax'] ?? false))['tax'];
+
+        if (! $this->isRoundingDifference($computed, $documentTax)) {
+            throw new \RuntimeException(sprintf(
+                'El IGV del comprobante (S/ %s) no cuadra con lo registrado (S/ %s): revisa cantidades y precios.',
+                number_format($documentTax, 2), number_format($computed, 2),
+            ));
+        }
     }
 
     protected function lockDraft(Purchase $draft): Purchase
@@ -140,31 +170,62 @@ class PurchaseService
         return round((int) $line['quantity'] * (float) $line['unit_price'] * (1 - (float) ($line['discount_percent'] ?? 0) / 100), 2);
     }
 
-    public function linesAmount(array $lines): float
+    /**
+     * @return array<int, float>
+     */
+    public function lineAmounts(array $lines): array
     {
-        return round(array_sum(array_map(fn (array $line) => $this->lineAmount($line), $lines)), 2);
+        return array_map(fn (array $line) => $this->lineAmount($line), array_values($lines));
     }
 
     /**
-     * Subtotal (base imponible), IGV y total a partir de la suma de líneas.
-     * Si los precios ya incluyen IGV, el total es lo que suman las líneas y el
-     * IGV se extrae; si no, se agrega encima.
+     * Diferencia máxima (S/) aceptada entre el IGV calculado y el impreso en
+     * el comprobante: solo cubre redondeos, no líneas mal registradas.
+     */
+    public const TAX_ROUNDING_TOLERANCE = 0.10;
+
+    /**
+     * Op. gravada, IGV y total como los calcula el comprobante.
      *
+     * Con precios que ya incluyen IGV, los emisores (se verificó con facturas
+     * reales de proveedores) sacan la base LÍNEA POR LÍNEA: cada importe ÷ 1.18
+     * redondeado y luego se suma; el IGV es total − base. Sobre el total
+     * puede salir 1 céntimo distinto.
+     *
+     * Si las líneas registradas no son las mismas del comprobante (se
+     * agruparon de otra forma), el redondeo puede diferir igual: con
+     * `$documentTax` (el IGV impreso) manda el comprobante, siempre que la
+     * diferencia sea solo de redondeo (TAX_ROUNDING_TOLERANCE).
+     *
+     * @param  array<int, float>  $lineAmounts
      * @return array{subtotal: float, tax: float, total: float}
      */
-    public function totals(float $linesAmount, bool $pricesIncludeTax): array
+    public function totals(array $lineAmounts, bool $pricesIncludeTax, ?float $documentTax = null): array
     {
-        $linesAmount = round($linesAmount, 2);
+        $taxFactor = 1 + self::TAX_RATE;
 
         if ($pricesIncludeTax) {
-            $subtotal = round($linesAmount / (1 + self::TAX_RATE), 2);
-
-            return ['subtotal' => $subtotal, 'tax' => round($linesAmount - $subtotal, 2), 'total' => $linesAmount];
+            $total = round(array_sum($lineAmounts), 2);
+            $subtotal = round(array_sum(array_map(fn (float $amount) => round($amount / $taxFactor, 2), $lineAmounts)), 2);
+        } else {
+            $subtotal = round(array_sum($lineAmounts), 2);
+            $total = round(array_sum(array_map(fn (float $amount) => round($amount * $taxFactor, 2), $lineAmounts)), 2);
         }
 
-        $tax = round($linesAmount * self::TAX_RATE, 2);
+        $tax = round($total - $subtotal, 2);
 
-        return ['subtotal' => $linesAmount, 'tax' => $tax, 'total' => round($linesAmount + $tax, 2)];
+        if ($documentTax !== null && $this->isRoundingDifference($tax, $documentTax)) {
+            $tax = round($documentTax, 2);
+            // Con IGV incluido el total no se mueve (es lo pagado); sin IGV, la base es la registrada.
+            $pricesIncludeTax ? $subtotal = round($total - $tax, 2) : $total = round($subtotal + $tax, 2);
+        }
+
+        return ['subtotal' => $subtotal, 'tax' => $tax, 'total' => $total];
+    }
+
+    public function isRoundingDifference(float $computedTax, float $documentTax): bool
+    {
+        return abs(round($computedTax - $documentTax, 2)) <= self::TAX_ROUNDING_TOLERANCE;
     }
 
     protected function registerLine(Purchase $purchase, array $line): PurchaseDetail
@@ -416,7 +477,11 @@ class PurchaseService
 
     protected function recalculateTotals(Purchase $purchase): void
     {
-        $purchase->update($this->totals((float) $purchase->details()->sum('subtotal'), (bool) $purchase->prices_include_tax));
+        $purchase->update($this->totals(
+            $purchase->details()->pluck('subtotal')->map(fn ($amount) => (float) $amount)->all(),
+            (bool) $purchase->prices_include_tax,
+            $purchase->document_tax === null ? null : (float) $purchase->document_tax,
+        ));
     }
 
     protected function generatePhysicalCode(ProductVariant $variant): string

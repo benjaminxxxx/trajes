@@ -88,6 +88,75 @@ test('a factura entered with IGV included splits the tax and costs units without
         ->and(PhysicalProduct::pluck('purchase_cost')->unique()->map(fn ($cost) => (float) $cost)->all())->toBe([59.32]);
 });
 
+/**
+ * Facturas reales de proveedores: [importes por línea con IGV, op. gravada, IGV, total].
+ * Todas sacan la base línea por línea; sobre el total, dos saldrían 1 céntimo distintas.
+ */
+dataset('supplier invoices', [
+    'chalecos y sesgo (F. electrónica)' => [[135, 120, 450, 300], 851.70, 153.30, 1005.00],
+    'Mia Khalessi F001-00000541' => [[420, 680, 425, 840, 550, 960, 660, 960], 4656.77, 838.23, 5495.00],
+    'bisutería F003-00000047' => [[60, 45, 30, 24, 40, 144, 144], 412.71, 74.29, 487.00],
+    'Gilda F101-00000136' => [[150, 150, 20, 160, 15], 419.49, 75.51, 495.00],
+    'Inversiones Sukey F005-00000068' => [[255, 90, 80, 190], 521.19, 93.81, 615.00],
+]);
+
+test('totals match real supplier invoices to the cent', function (array $lines, float $taxable, float $tax, float $total) {
+    expect(app(PurchaseService::class)->totals($lines, pricesIncludeTax: true))
+        ->toBe(['subtotal' => $taxable, 'tax' => $tax, 'total' => $total]);
+})->with('supplier invoices');
+
+test('a purchase registered with the invoice lines books its exact IGV and pays its total', function (array $lines, float $taxable, float $tax, float $total) {
+    $product = makeProduct(false);
+
+    $purchase = app(PurchaseService::class)->register(
+        ['document_type' => 'factura', 'prices_include_tax' => true, 'issue_date' => now()->toDateString()],
+        array_map(fn (float $amount) => ['product_id' => $product->id, 'size_id' => null, 'color_id' => null, 'quantity' => 1, 'unit_price' => $amount, 'discount_percent' => 0], $lines),
+    );
+
+    expect((float) $purchase->subtotal)->toEqual($taxable)
+        ->and((float) $purchase->tax)->toEqual($tax)
+        ->and((float) CashMovement::sole()->amount)->toEqual($total);
+})->with('supplier invoices');
+
+test('lines grouped differently from the invoice use the printed IGV when it is only rounding', function () {
+    $product = makeProduct(true);
+    // Mismo comprobante de S/ 1,005 registrado como Terno Sesgo M (1×195), S (2×195) y 16 (3×140).
+    $lines = [[1, 195], [2, 195], [3, 140]];
+    $header = ['document_type' => 'factura', 'prices_include_tax' => true, 'issue_date' => now()->toDateString(), 'document_total' => 1005];
+    $rows = array_map(fn (array $line) => ['product_id' => $product->id, 'size_id' => null, 'color_id' => null, 'quantity' => $line[0], 'unit_price' => $line[1], 'discount_percent' => 0], $lines);
+
+    expect(app(PurchaseService::class)->totals([195, 390, 420], true))->toBe(['subtotal' => 851.69, 'tax' => 153.31, 'total' => 1005.0]);
+
+    $purchase = app(PurchaseService::class)->register($header + ['document_tax' => 153.30], $rows);
+
+    expect((float) $purchase->subtotal)->toEqual(851.70)
+        ->and((float) $purchase->tax)->toEqual(153.30)
+        ->and((float) $purchase->total)->toEqual(1005.0)
+        ->and((float) CashMovement::sole()->amount)->toEqual(1005.0);
+
+    // Una diferencia que no es redondeo no se confirma: las líneas están mal.
+    app(PurchaseService::class)->register($header + ['document_tax' => 150.00], $rows);
+})->throws(RuntimeException::class, 'no cuadra');
+
+test('the purchase form shows when the printed IGV corrects a rounding difference', function () {
+    $product = makeProduct(false);
+
+    $form = Livewire::test(PurchaseForm::class)
+        ->call('addCreatedProduct', $product->id, 'purchase')
+        ->call('addCreatedProduct', $product->id, 'purchase')
+        ->set('document_type', 'factura');
+
+    [$first, $second] = array_keys($form->get('items'));
+
+    $form->set("items.{$first}.unit_price", 195)
+        ->set("items.{$second}.quantity", 2)
+        ->set("items.{$second}.unit_price", 405)
+        ->set('document_tax', 153.30)
+        ->assertSet('taxDifference', 0.01)
+        ->assertSet('totals', ['subtotal' => 851.70, 'tax' => 153.30, 'total' => 1005.0])
+        ->assertSee('Por redondeo');
+});
+
 test('a boleta entered with IGV included costs exactly what was paid', function () {
     $product = makeProduct(false);
 

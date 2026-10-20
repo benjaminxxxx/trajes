@@ -60,6 +60,12 @@
                     <flux:input wire:model.live.debounce.400ms="document_total" type="number" step="0.01" min="0"
                         inputmode="decimal" label="Total del comprobante (S/)" placeholder="Ej: 5495.00"
                         description="Opcional: el total impreso, para comprobar que lo registrado cuadra." />
+
+                    @if ($document_type === 'factura')
+                        <flux:input wire:model.live.debounce.400ms="document_tax" type="number" step="0.01" min="0"
+                            inputmode="decimal" label="IGV del comprobante (S/)" placeholder="Ej: 838.23"
+                            description="Opcional: si el IGV calculado difiere por céntimos de redondeo, se usa el de la factura." />
+                    @endif
                 </div>
 
                 <label
@@ -214,6 +220,26 @@
                                 {{ $this->documentDifference > 0 ? 'Sobran' : 'Faltan' }}
                                 S/ {{ number_format(abs($this->documentDifference), 2) }} respecto al comprobante
                                 (S/ {{ number_format((float) $document_total, 2) }}).
+                            </span>
+                        </p>
+                    @endif
+                @endif
+
+                @if ($this->taxDifference !== null && abs($this->taxDifference) >= 0.01)
+                    @if (abs($this->taxDifference) <= \App\Services\Purchasing\PurchaseService::TAX_ROUNDING_TOLERANCE)
+                        <p class="flex items-start gap-1.5 rounded-lg bg-sky-500/15 px-3 py-2 text-xs text-sky-300">
+                            <flux:icon icon="information-circle" class="size-4 shrink-0" />
+                            <span>
+                                Por redondeo el IGV calculado era S/ {{ number_format($this->totals['tax'] + $this->taxDifference, 2) }};
+                                se usa el de la factura (S/ {{ number_format($this->totals['tax'], 2) }}).
+                            </span>
+                        </p>
+                    @else
+                        <p class="flex items-start gap-1.5 rounded-lg bg-amber-500/15 px-3 py-2 text-xs text-amber-300">
+                            <flux:icon icon="exclamation-triangle" class="size-4 shrink-0" />
+                            <span>
+                                El IGV de la factura difiere en S/ {{ number_format(abs($this->taxDifference), 2) }}: no es redondeo,
+                                revisa cantidades y precios.
                             </span>
                         </p>
                     @endif

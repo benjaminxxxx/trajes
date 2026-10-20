@@ -24,6 +24,7 @@ class Purchase extends Model
         'tax',
         'total',
         'document_total',
+        'document_tax',
         'status',
         'notes',
         'draft_items',
@@ -37,6 +38,7 @@ class Purchase extends Model
         'tax' => 'decimal:2',
         'total' => 'decimal:2',
         'document_total' => 'decimal:2',
+        'document_tax' => 'decimal:2',
         'draft_items' => 'array',
     ];
 

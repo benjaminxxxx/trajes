@@ -39,6 +39,9 @@ class PurchaseForm extends Component
     // Total impreso en el comprobante, para comprobar que lo registrado cuadra.
     public float|string|null $document_total = null;
 
+    // IGV impreso en el comprobante: corrige el redondeo para que el crédito fiscal cuadre al céntimo.
+    public float|string|null $document_tax = null;
+
     // Borrador en edición (se mantiene en la URL para poder retomarlo).
     #[Url(as: 'borrador')]
     public ?int $draftId = null;
@@ -85,6 +88,7 @@ class PurchaseForm extends Component
         $this->has_invoice_pending = $draft->has_invoice_pending;
         $this->prices_include_tax = $draft->prices_include_tax;
         $this->document_total = $draft->document_total === null ? null : (float) $draft->document_total;
+        $this->document_tax = $draft->document_tax === null ? null : (float) $draft->document_tax;
         $this->issue_date = $draft->issue_date?->toDateString();
         $this->notes = $draft->notes;
         $this->items = collect($draft->draft_items ?? [])
@@ -266,7 +270,32 @@ class PurchaseForm extends Component
     {
         $service = app(PurchaseService::class);
 
-        return $service->totals($service->linesAmount(array_values($this->items)), $this->prices_include_tax);
+        return $service->totals($service->lineAmounts($this->items), $this->prices_include_tax, $this->documentTaxValue());
+    }
+
+    /**
+     * IGV calculado menos el impreso en el comprobante, sin aplicar este
+     * último (null si no se escribió).
+     */
+    #[Computed]
+    public function taxDifference(): ?float
+    {
+        $documentTax = $this->documentTaxValue();
+
+        if ($documentTax === null) {
+            return null;
+        }
+
+        $service = app(PurchaseService::class);
+        $computed = $service->totals($service->lineAmounts($this->items), $this->prices_include_tax)['tax'];
+
+        return round($computed - $documentTax, 2);
+    }
+
+    protected function documentTaxValue(): ?float
+    {
+        // Solo la factura discrimina el IGV.
+        return $this->document_type === 'factura' && is_numeric($this->document_tax) ? round((float) $this->document_tax, 2) : null;
     }
 
     /**
@@ -357,6 +386,7 @@ class PurchaseForm extends Component
             'document_type' => 'required|in:nota_venta,boleta,factura',
             'issue_date' => 'required|date',
             'document_total' => 'nullable|numeric|min:0',
+            'document_tax' => 'nullable|numeric|min:0',
             'items' => $requireItems ? 'required|array|min:1' : 'array',
             'items.*.quantity' => 'required|integer|min:1',
             'items.*.unit_price' => 'required|numeric|min:0',
@@ -376,6 +406,7 @@ class PurchaseForm extends Component
             'has_invoice_pending' => $this->has_invoice_pending,
             'prices_include_tax' => $this->prices_include_tax,
             'document_total' => is_numeric($this->document_total) ? round((float) $this->document_total, 2) : null,
+            'document_tax' => $this->documentTaxValue(),
             'issue_date' => $this->issue_date,
             'notes' => $this->notes,
         ];
@@ -402,7 +433,7 @@ class PurchaseForm extends Component
 
     protected function resetForm(): void
     {
-        $this->reset(['supplier_id', 'supplier_name', 'document_number', 'has_invoice_pending', 'document_total', 'notes', 'items', 'draftId']);
+        $this->reset(['supplier_id', 'supplier_name', 'document_number', 'has_invoice_pending', 'document_total', 'document_tax', 'notes', 'items', 'draftId']);
         $this->document_type = 'nota_venta';
         $this->prices_include_tax = true;
         $this->issue_date = now()->toDateString();
