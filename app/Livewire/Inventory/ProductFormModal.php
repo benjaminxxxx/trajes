@@ -7,6 +7,7 @@ use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Product;
 use App\Services\Core\AccountRule;
+use App\Services\Inventory\ProductSearch;
 use App\Services\Inventory\ProductService;
 use Flux\Flux;
 use Illuminate\Contracts\View\View;
@@ -88,6 +89,11 @@ class ProductFormModal extends Component
 
     public string $newCharacteristic = '';
 
+    /** @var array<int, string> Etiquetas manuales (Quinceañera, Señora...). */
+    public array $tags = [];
+
+    public string $newTag = '';
+
     public bool $hasPhysicalItems = false;
 
     /** @var array<int, TemporaryUploadedFile> Fotos recién elegidas (se vacía al acumularlas). */
@@ -104,7 +110,8 @@ class ProductFormModal extends Component
         $this->context = $context;
 
         if ($productId) {
-            $product = Product::with(['characteristics', 'category:id,name', 'brand:id,name'])->findOrFail($productId);
+            $product = Product::with(['characteristics', 'tags', 'category:id,name', 'brand:id,name'])->findOrFail($productId);
+            $this->tags = $product->tags->pluck('name')->all();
 
             $this->productId = $product->id;
             $this->name = $product->name;
@@ -205,6 +212,22 @@ class ProductFormModal extends Component
         }
     }
 
+    public function addTag(): void
+    {
+        $tag = mb_substr(Str::squish($this->newTag), 0, 60);
+        $this->newTag = '';
+
+        if ($tag !== '' && ! collect($this->tags)->contains(fn (string $existing) => mb_strtolower($existing) === mb_strtolower($tag))) {
+            $this->tags[] = $tag;
+        }
+    }
+
+    public function removeTag(int $index): void
+    {
+        unset($this->tags[$index]);
+        $this->tags = array_values($this->tags);
+    }
+
     public function removeCharacteristic(int $index): void
     {
         unset($this->characteristics[$index]);
@@ -280,6 +303,8 @@ class ProductFormModal extends Component
             'characteristics.*.attribute_id' => ['nullable', 'integer'],
             'characteristics.*.name' => ['required', 'string', 'max:60'],
             'characteristics.*.value' => ['nullable', 'string', 'max:120'],
+            'tags' => ['array', 'max:20'],
+            'tags.*' => ['string', 'max:60'],
             'photos' => ['array', 'max:'.self::MAX_PHOTOS],
             'photos.*' => ['image', 'mimes:jpg,jpeg,png,webp', 'max:12288'],
         ];
@@ -309,6 +334,7 @@ class ProductFormModal extends Component
             'allow_sale' => $validated['usage'] !== 'rental',
             'is_active' => $validated['is_active'],
             'characteristics' => $validated['characteristics'] ?? [],
+            'tags' => $validated['tags'] ?? [],
             // Lo nuevo que se escribió (una tela, un corte) queda como sugerencia.
             'can_add_suggestions' => Gate::allows('inventario.atributos'),
         ];
@@ -414,7 +440,7 @@ class ProductFormModal extends Component
                 ? Category::where('is_active', true)->withCount('products')->orderByDesc('products_count')->orderBy('name')->get(['id', 'name'])
                 : collect(),
             'finderResults' => $this->show && $this->step === 'category' && mb_strlen(trim($this->finder)) >= 2
-                ? $this->productCards($this->matching($this->finder)->with('category:id,name'))
+                ? $this->productCards(app(ProductSearch::class)->apply(Product::query(), $this->finder)->with('category:id,name'))
                 : collect(),
             'chosenCategory' => $this->step === 'products' ? Category::find($this->chosenCategoryId) : null,
             'existingProducts' => $this->show && $this->step === 'products'
@@ -432,6 +458,30 @@ class ProductFormModal extends Component
             'characteristicNames' => $this->show && $this->step === 'form'
                 ? Attribute::active()->orderBy('name')->pluck('name')
                 : collect(),
+            'tagSuggestions' => $this->show && $this->step === 'form' ? app(ProductSearch::class)->tagSuggestions() : [],
+            'automaticTags' => $this->show && $this->step === 'form' ? $this->automaticTagsPreview() : [],
         ]);
+    }
+
+    /**
+     * Lo que se etiqueta solo con lo que hay en el formulario (y, si ya
+     * existe, las tallas y colores de sus variantes).
+     *
+     * @return array<int, string>
+     */
+    protected function automaticTagsPreview(): array
+    {
+        $variantTags = $this->productId
+            ? collect(Product::with('variants.size:id,name', 'variants.color:id,name')->find($this->productId)?->variants)
+                ->flatMap(fn ($variant) => [$variant->color?->name, $variant->size ? "Talla {$variant->size->name}" : null])
+            : collect();
+
+        return collect([
+            trim($this->category),
+            Product::GENDER_LABELS[$this->gender] ?? null,
+            trim($this->brand),
+            ...collect($this->characteristics)->pluck('value'),
+            ...$variantTags,
+        ])->filter()->unique(fn (string $tag) => mb_strtolower($tag))->values()->all();
     }
 }

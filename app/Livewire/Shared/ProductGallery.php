@@ -6,6 +6,7 @@ use App\Models\PhysicalProduct;
 use App\Models\Product;
 use App\Models\ProductMedia;
 use App\Models\ProductVariant;
+use App\Services\Inventory\ProductSearch;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Livewire\Attributes\Computed;
 use Livewire\Component;
@@ -53,12 +54,7 @@ class ProductGallery extends Component
             ->where('is_active', true)
             ->when($this->mode === 'sale', fn ($q) => $q->where('allow_sale', true))
             ->when($this->mode === 'rental', fn ($q) => $q->where('allow_rental', true))
-            ->when($this->search !== '', function ($q) {
-                $q->where(function ($q2) {
-                    $q2->where('name', 'like', "%{$this->search}%")
-                        ->orWhere('code', 'like', "%{$this->search}%");
-                });
-            })
+            ->when(trim($this->search) !== '', fn ($q) => app(ProductSearch::class)->apply($q, $this->search))
             ->withSum('variants as total_stock', 'stock')
             ->withMin('variants as sale_price_from', 'sale_price')
             ->withMin('variants as rental_price_from', 'rental_price');
@@ -88,6 +84,25 @@ class ProductGallery extends Component
     }
 
     /**
+     * Cómo se entendió cada palabra buscada ("rojo" → Color, "l" → Talla).
+     *
+     * @return array<int, array{word: string, kind: string}>
+     */
+    #[Computed]
+    public function searchChips(): array
+    {
+        return trim($this->search) === '' ? [] : app(ProductSearch::class)->interpret($this->search);
+    }
+
+    public function removeSearchWord(string $word): void
+    {
+        $this->search = collect(app(ProductSearch::class)->words($this->search))
+            ->reject(fn (string $existing) => $existing === mb_strtolower($word))
+            ->implode(' ');
+        $this->resetPage();
+    }
+
+    /**
      * Adjunta, por producto, la imagen de portada (ProductMedia primaria) y
      * los colores en los que existe (para los puntitos de la card). Se hace
      * en 2 consultas agrupadas en vez de N+1 por producto.
@@ -100,9 +115,12 @@ class ProductGallery extends Component
             return;
         }
 
+        // Portada: la principal o, si no hay, el primer medio (puede ser un video).
         $covers = ProductMedia::whereIn('product_id', $ids)
-            ->where('is_primary', true)
+            ->orderByDesc('is_primary')
+            ->orderBy('sort_order')
             ->get()
+            ->unique('product_id')
             ->keyBy('product_id');
 
         $swatches = ProductVariant::whereIn('product_id', $ids)
@@ -114,6 +132,7 @@ class ProductGallery extends Component
 
         foreach ($products as $product) {
             $product->cover_url = $covers[$product->id]->url ?? null;
+            $product->cover_is_video = ($covers[$product->id]->file_type ?? null) === 'video';
             $product->swatch_colors = $swatches[$product->id] ?? collect();
         }
     }
@@ -124,7 +143,7 @@ class ProductGallery extends Component
      */
     public function openDetail(int $productId): void
     {
-        $this->dispatch('product-detail-requested', productId: $productId, mode: $this->mode);
+        $this->dispatch('product-detail-requested', productId: $productId, mode: $this->mode, context: $this->fieldContext);
     }
 
     /**

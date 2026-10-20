@@ -4,6 +4,7 @@ namespace App\Livewire\Inventory;
 
 use App\Models\Category;
 use App\Models\Product;
+use App\Services\Inventory\ProductSearch;
 use App\Services\Inventory\ProductService;
 use Livewire\Attributes\On;
 use Livewire\Component;
@@ -84,13 +85,7 @@ class ProductIndex extends Component
             ->withCount('physicalProducts')
             ->when($this->showTrashed, fn ($q) => $q->onlyTrashed())
             ->when($this->categoryFilter, fn ($q) => $q->where('category_id', $this->categoryFilter))
-            ->when($this->search !== '', function ($q) {
-                $q->where(function ($sub) {
-                    $sub->where('name', 'like', "%{$this->search}%")
-                        ->orWhere('code', 'like', "%{$this->search}%")
-                        ->orWhereHas('characteristics', fn ($c) => $c->where('value', 'like', "%{$this->search}%"));
-                });
-            })
+            ->when(trim($this->search) !== '', fn ($q) => app(ProductSearch::class)->apply($q, $this->search))
             ->orderBy('name')
             ->paginate(12);
 

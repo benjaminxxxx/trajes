@@ -3,6 +3,7 @@
 namespace App\Services\Shared;
 
 use App\Models\Product;
+use App\Services\Inventory\ProductSearch;
 use Illuminate\Support\Collection;
 
 class ProductSearchResolver implements SearchResolver
@@ -11,10 +12,10 @@ class ProductSearchResolver implements SearchResolver
     {
         return Product::query()
             ->where('is_active', true)
-            ->where(function ($q) use ($term) {
-                $q->where('name', 'like', "%{$term}%")
-                    ->orWhere('code', 'like', "%{$term}%");
-            })
+            // Mientras se escribe ("ter...") también vale el nombre o código parcial.
+            ->where(fn ($q) => $q->where('name', 'like', "%{$term}%")
+                ->orWhere('code', 'like', "%{$term}%")
+                ->orWhere(fn ($words) => app(ProductSearch::class)->apply($words, $term)))
             ->limit(6)
             ->get()
             ->map(fn (Product $product) => SearchResult::fromName(

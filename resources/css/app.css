@@ -116,3 +116,8 @@ select:focus[data-flux-control] {
 /* \[:where(&)\]:size-4 {
     @apply size-4;
 } */
+
+/* Alpine: oculto hasta que Alpine inicializa (evita el parpadeo del visor y avisos). */
+[x-cloak] {
+    display: none !important;
+}

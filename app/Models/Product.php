@@ -84,6 +84,42 @@ class Product extends Model
     }
 
     /**
+     * Etiquetas escritas a mano (Quinceañera, Señora...).
+     */
+    public function tags(): HasMany
+    {
+        return $this->hasMany(ProductTag::class)->orderBy('name');
+    }
+
+    public const GENDER_LABELS = [
+        'femenino' => 'Mujer',
+        'masculino' => 'Hombre',
+        'nino' => 'Niño/a',
+        'unisex' => 'Unisex',
+    ];
+
+    /**
+     * Etiquetas automáticas: salen de la categoría, el género, la marca, las
+     * características y las tallas/colores de sus variantes. No se guardan:
+     * al agregar o cambiar una variante ya aparecen solas.
+     *
+     * @return array<int, string>
+     */
+    public function automaticTags(): array
+    {
+        $this->loadMissing(['category:id,name', 'brand:id,name', 'characteristics', 'variants.size:id,name', 'variants.color:id,name']);
+
+        return collect([
+            $this->category?->name,
+            self::GENDER_LABELS[$this->gender] ?? null,
+            $this->brand?->name,
+            ...$this->characteristics->pluck('value'),
+            ...$this->variants->pluck('color.name'),
+            ...$this->variants->pluck('size.name')->map(fn (?string $size) => $size ? "Talla {$size}" : null),
+        ])->filter()->unique(fn (string $tag) => mb_strtolower($tag))->values()->all();
+    }
+
+    /**
      * Resumen corto para distinguir productos parecidos: "Satín · Sesgo".
      */
     public function characteristicsSummary(): string

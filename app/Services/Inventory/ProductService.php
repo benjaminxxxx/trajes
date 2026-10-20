@@ -161,13 +161,17 @@ class ProductService
         return DB::transaction(function () use ($data) {
             $data['slug'] = Str::slug($data['name'].'-'.Str::random(5));
 
-            [$characteristics, $canSuggest] = [$data['characteristics'] ?? null, (bool) ($data['can_add_suggestions'] ?? false)];
-            unset($data['characteristics'], $data['can_add_suggestions']);
+            [$characteristics, $canSuggest, $tags] = [$data['characteristics'] ?? null, (bool) ($data['can_add_suggestions'] ?? false), $data['tags'] ?? null];
+            unset($data['characteristics'], $data['can_add_suggestions'], $data['tags']);
 
             $product = Product::create($data);
 
             if (is_array($characteristics)) {
                 $this->sincronizarCaracteristicas($product, $characteristics, $canSuggest);
+            }
+
+            if (is_array($tags)) {
+                $this->sincronizarEtiquetas($product, $tags);
             }
 
             return $product;
@@ -191,13 +195,17 @@ class ProductService
                 $data['slug'] = Str::slug($data['name'].'-'.Str::random(5));
             }
 
-            [$characteristics, $canSuggest] = [$data['characteristics'] ?? null, (bool) ($data['can_add_suggestions'] ?? false)];
-            unset($data['characteristics'], $data['can_add_suggestions']);
+            [$characteristics, $canSuggest, $tags] = [$data['characteristics'] ?? null, (bool) ($data['can_add_suggestions'] ?? false), $data['tags'] ?? null];
+            unset($data['characteristics'], $data['can_add_suggestions'], $data['tags']);
 
             $product->update($data);
 
             if (is_array($characteristics)) {
                 $this->sincronizarCaracteristicas($product, $characteristics, $canSuggest);
+            }
+
+            if (is_array($tags)) {
+                $this->sincronizarEtiquetas($product, $tags);
             }
 
             return $product;
@@ -255,6 +263,28 @@ class ProductService
         }
 
         $product->unsetRelation('characteristics');
+    }
+
+    /**
+     * Etiquetas escritas a mano. Se ignoran las repetidas (sin importar
+     * mayúsculas) y las vacías.
+     *
+     * @param  array<int, string>  $tags
+     */
+    public function sincronizarEtiquetas(Product $product, array $tags): void
+    {
+        $wanted = collect($tags)
+            ->map(fn ($tag) => mb_substr(Str::squish((string) $tag), 0, 60))
+            ->filter()
+            ->unique(fn (string $tag) => mb_strtolower($tag))
+            ->keyBy(fn (string $tag) => mb_strtolower($tag));
+
+        $existing = $product->tags()->get()->keyBy(fn ($tag) => mb_strtolower($tag->name));
+
+        $existing->diffKeys($wanted)->each->delete();
+        $wanted->diffKeys($existing)->each(fn (string $tag) => $product->tags()->create(['name' => $tag]));
+
+        $product->unsetRelation('tags');
     }
 
     /**

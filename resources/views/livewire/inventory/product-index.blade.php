@@ -17,7 +17,7 @@
     <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:flex lg:items-center">
         <flux:input
             wire:model.live.debounce.300ms="search"
-            placeholder="Buscar por nombre, código o tela..."
+            placeholder="Busca: mujer rojo L satín quinceañera..."
             icon="magnifying-glass"
             class="w-full lg:max-w-xs"
         />

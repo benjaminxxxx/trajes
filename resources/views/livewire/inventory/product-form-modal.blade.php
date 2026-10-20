@@ -172,6 +172,45 @@
             <flux:error name="characteristics.*.value" />
         </div>
 
+        {{-- Etiquetas: las automáticas salen solas; a mano solo lo que no está en otro lado --}}
+        <div class="flex flex-col gap-2">
+            <div class="flex items-center justify-between">
+                <flux:label>Etiquetas para buscar</flux:label>
+                <span class="text-[11px] text-zinc-500">Ej: Quinceañera, Señora, Boda</span>
+            </div>
+
+            <div class="flex flex-wrap gap-1.5">
+                @foreach ($automaticTags as $automaticTag)
+                    <span class="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"
+                        title="Automática: sale de la categoría, género, marca, características, tallas o colores">{{ $automaticTag }}</span>
+                @endforeach
+                @foreach ($tags as $index => $tag)
+                    <span wire:key="product-tag-{{ $index }}-{{ Str::slug($tag) }}"
+                        class="inline-flex items-center gap-1 rounded-full bg-violet-100 py-0.5 pl-2.5 pr-1 text-xs font-medium text-violet-700 dark:bg-violet-950/50 dark:text-violet-300">
+                        {{ $tag }}
+                        <button type="button" wire:click="removeTag({{ $index }})" class="grid size-4 place-items-center rounded-full hover:bg-violet-200 dark:hover:bg-violet-900"
+                            aria-label="Quitar {{ $tag }}">
+                            <flux:icon icon="x-mark" class="size-3" />
+                        </button>
+                    </span>
+                @endforeach
+            </div>
+
+            <div class="flex items-center gap-2">
+                <flux:input size="sm" wire:model="newTag" wire:keydown.enter.prevent="addTag" list="product-tag-suggestions"
+                    autocomplete="off" placeholder="Agregar etiqueta: para quién o para qué ocasión" class="flex-1" />
+                <flux:button size="sm" icon="plus" wire:click="addTag" aria-label="Agregar etiqueta" />
+            </div>
+            <datalist id="product-tag-suggestions">
+                @foreach ($tagSuggestions as $suggestion)
+                    <option value="{{ $suggestion }}"></option>
+                @endforeach
+            </datalist>
+            <p class="text-[11px] text-zinc-500">
+                Las grises se agregan solas y se actualizan al comprar nuevas tallas o colores.
+            </p>
+        </div>
+
         <datalist id="product-modal-categories">
             @foreach ($categoryOptions as $option)
                 <option value="{{ $option }}"></option>
