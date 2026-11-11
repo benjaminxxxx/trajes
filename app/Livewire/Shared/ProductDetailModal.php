@@ -6,9 +6,12 @@ use App\Models\PhysicalProduct;
 use App\Models\Product;
 use App\Models\ProductMedia;
 use App\Models\ProductVariant;
+use App\Models\Purchase;
+use App\Models\PurchaseDetail;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Livewire\Attributes\On;
 use Livewire\Component;
 
@@ -23,6 +26,9 @@ use Livewire\Component;
  */
 class ProductDetailModal extends Component
 {
+    /**
+     * @param  string  $mode  'sale' | 'rental' | 'catalog' (catálogo para el cliente: se puede compartir)
+     */
     #[On('product-detail-requested')]
     public function open(int $productId, string $mode = 'sale', string $context = ''): void
     {
@@ -32,9 +38,13 @@ class ProductDetailModal extends Component
             return;
         }
 
-        $variants = $this->variantsWithStock($product, $mode);
-        $prices = $variants->pluck($mode === 'rental' ? 'rental_price' : 'sale_price')->filter();
-        $price = $prices->isNotEmpty() ? (float) $prices->min() : ($mode === 'rental' ? null : (float) $product->price);
+        $isCatalog = $mode === 'catalog';
+        // En el catálogo el precio y el stock son los de venta, o los de alquiler si no se vende.
+        $priceMode = $isCatalog ? ($product->allow_sale ? 'sale' : 'rental') : $mode;
+
+        $variants = $this->variantsWithStock($product, $priceMode);
+        $prices = $variants->pluck($priceMode === 'rental' ? 'rental_price' : 'sale_price')->filter();
+        $price = $prices->isNotEmpty() ? (float) $prices->min() : ($priceMode === 'rental' ? null : (float) $product->price);
 
         $this->dispatch('product-reel-open', product: [
             'id' => $product->id,
@@ -43,7 +53,7 @@ class ProductDetailModal extends Component
             'category' => $product->category?->name,
             'description' => $product->description,
             'price' => $price,
-            'priceLabel' => $mode === 'rental' ? 'por alquiler' : 'venta',
+            'priceLabel' => $priceMode === 'rental' ? 'por alquiler' : 'venta',
             'highlights' => [...$product->characteristics->pluck('value'), ...$product->tags->pluck('name')],
             // Solo lo que hay: si no hay stock registrado, el visor no muestra nada de stock.
             'variants' => $variants
@@ -62,7 +72,51 @@ class ProductDetailModal extends Component
                 ->all(),
             'mode' => $mode,
             'context' => $context,
+            'shareable' => $isCatalog,
+            // Solo para el vendedor (no se muestra al cliente salvo que lo abra).
+            'internal' => $isCatalog && Gate::allows('catalogo.costos') ? $this->internalInfo($product, $variants, $price) : null,
         ]);
+    }
+
+    /**
+     * Costo, margen y últimas compras con su proveedor, para que el vendedor
+     * sepa hasta dónde puede bajar el precio.
+     *
+     * @param  Collection<int, ProductVariant>  $variants
+     * @return array{cost: float|null, margin: float|null, marginPercent: float|null, purchases: array<int, array{date: string|null, supplier: string, document: string|null, quantity: int, unitCost: float}>}
+     */
+    protected function internalInfo(Product $product, Collection $variants, ?float $price): array
+    {
+        // Costo promedio ponderado por el stock actual; si no hay stock, el último promedio o el costo del producto.
+        $stocked = $variants->filter(fn (ProductVariant $variant) => (int) $variant->stock > 0 && (float) $variant->average_cost > 0);
+        $cost = $stocked->isNotEmpty()
+            ? round($stocked->sum(fn (ProductVariant $variant) => $variant->stock * (float) $variant->average_cost) / $stocked->sum('stock'), 2)
+            : (((float) $variants->max('average_cost')) ?: ($product->purchase_price !== null ? (float) $product->purchase_price : null));
+
+        $purchases = PurchaseDetail::query()
+            ->with('purchase.supplier')
+            ->whereIn('product_variant_id', $variants->pluck('id'))
+            ->whereHas('purchase', fn ($query) => $query->where('status', Purchase::STATUS_COMPLETED))
+            ->latest('id')
+            ->limit(3)
+            ->get()
+            ->map(fn (PurchaseDetail $detail) => [
+                'date' => $detail->purchase->issue_date?->format('d/m/Y'),
+                'supplier' => $detail->purchase->supplier?->display_name ?? 'Sin proveedor',
+                'document' => $detail->purchase->document_number,
+                'quantity' => (int) $detail->quantity,
+                'unitCost' => round((float) $detail->subtotal / max(1, (int) $detail->quantity), 2),
+            ])
+            ->all();
+
+        $margin = $cost !== null && $price !== null ? round($price - $cost, 2) : null;
+
+        return [
+            'cost' => $cost,
+            'margin' => $margin,
+            'marginPercent' => $margin !== null && $price > 0 ? round($margin / $price * 100, 1) : null,
+            'purchases' => $purchases,
+        ];
     }
 
     /**

@@ -7,11 +7,14 @@
             index: 0,
             muted: true,
             showStock: true,
+            showInternal: false,
+            sharing: false,
             observer: null,
             show(product) {
                 this.p = product;
                 this.index = 0;
                 this.showStock = true;
+                this.showInternal = false;
                 this.open = true;
                 document.body.style.overflow = 'hidden';
                 // En el celular, el botón Atrás cierra el visor en vez de salir de la venta.
@@ -58,6 +61,34 @@
             go(step) {
                 const slides = this.$refs.scroller?.querySelectorAll('[data-slide]') ?? [];
                 slides[this.index + step]?.scrollIntoView({ behavior: 'smooth' });
+            },
+            money(value) {
+                return `S/ ${Number(value).toFixed(2)}`;
+            },
+            // Comparte las fotos y videos como archivos (en el celular se elige WhatsApp).
+            // Si el navegador no puede compartir archivos, abre WhatsApp con los enlaces.
+            // Solo va el nombre y el precio de venta: nunca el costo.
+            async share() {
+                if (this.sharing) return;
+                this.sharing = true;
+                const text = this.p.price !== null ? `${this.p.name} - ${this.money(this.p.price)}` : this.p.name;
+                try {
+                    const files = await Promise.all(this.p.media.map(async (item, i) => {
+                        const blob = await (await fetch(item.url)).blob();
+                        const extension = item.url.split('?')[0].split('.').pop() || (item.type === 'video' ? 'mp4' : 'jpg');
+                        return new File([blob], `${this.p.code || 'producto'}-${i + 1}.${extension}`, { type: blob.type });
+                    }));
+                    if (files.length && navigator.canShare?.({ files })) {
+                        await navigator.share({ files, text });
+                        return;
+                    }
+                } catch (error) {
+                    if (error?.name === 'AbortError') return;
+                } finally {
+                    this.sharing = false;
+                }
+                const links = this.p.media.map((item) => item.url).join('\n');
+                window.open(`https://wa.me/?text=${encodeURIComponent(links ? `${text}\n${links}` : text)}`, '_blank');
             },
             addToCart() {
                 Livewire.dispatch('product-picker-requested', { context: this.p.context, productId: this.p.id, mode: this.p.mode });
@@ -180,9 +211,56 @@
                                         </template>
                                     </div>
                                     <p class="mt-2 line-clamp-2 text-xs text-white/70" x-show="p.description" x-text="p.description"></p>
+
+                                    {{-- Catálogo: detalle interno para el vendedor (costo y proveedor), oculto hasta tocar el botón --}}
+                                    <template x-if="p.internal">
+                                        <div x-show="showInternal" x-transition
+                                            class="mt-3 max-h-[40dvh] overflow-y-auto rounded-2xl bg-black/70 p-3 text-xs backdrop-blur">
+                                            <div class="flex flex-wrap gap-x-5 gap-y-1">
+                                                <p>
+                                                    <span class="text-white/60">Costo</span>
+                                                    <span class="font-bold" x-text="p.internal.cost !== null ? money(p.internal.cost) : 'Sin registrar'"></span>
+                                                </p>
+                                                <p x-show="p.internal.margin !== null">
+                                                    <span class="text-white/60">Ganancia</span>
+                                                    <span class="font-bold" :class="p.internal.margin < 0 ? 'text-red-400' : 'text-emerald-400'"
+                                                        x-text="`${money(p.internal.margin)} (${p.internal.marginPercent ?? 0}%)`"></span>
+                                                </p>
+                                            </div>
+                                            <p class="mt-2 text-[11px] font-semibold uppercase tracking-wide text-white/60" x-show="p.internal.purchases.length">Últimas compras</p>
+                                            <template x-for="(purchase, i) in p.internal.purchases" :key="i">
+                                                <div class="mt-1 flex items-start justify-between gap-3">
+                                                    <span class="min-w-0">
+                                                        <span class="block truncate font-semibold" x-text="purchase.supplier"></span>
+                                                        <span class="text-white/60" x-text="[purchase.date, purchase.document].filter(Boolean).join(' · ')"></span>
+                                                    </span>
+                                                    <span class="shrink-0 text-right tabular-nums" x-text="`${purchase.quantity} × ${money(purchase.unitCost)}`"></span>
+                                                </div>
+                                            </template>
+                                            <p class="mt-1 text-white/60" x-show="! p.internal.purchases.length">No hay compras registradas.</p>
+                                        </div>
+                                    </template>
+
+                                    {{-- Catálogo: botoncito de detalle, el precio de venta al lado y compartir --}}
+                                    <div class="mt-3 flex items-center gap-2" x-show="p.shareable">
+                                        <button type="button" x-show="p.internal" x-on:click="showInternal = ! showInternal"
+                                            class="grid size-8 place-items-center rounded-full bg-white/15 backdrop-blur hover:bg-white/25"
+                                            :aria-label="showInternal ? 'Ocultar detalle' : 'Ver costo y proveedor'">
+                                            <flux:icon icon="information-circle" variant="mini" class="size-5" x-show="! showInternal" />
+                                            <flux:icon icon="eye-slash" variant="mini" class="size-4" x-show="showInternal" />
+                                        </button>
+                                        <span class="text-xl font-bold" x-show="p.price !== null" x-text="money(p.price)"></span>
+                                        <span class="text-[11px] text-white/60" x-show="p.price !== null && p.mode === 'catalog' && p.priceLabel === 'por alquiler'">por alquiler</span>
+                                    </div>
                                 </div>
                                 <div class="flex shrink-0 flex-col items-end gap-2">
-                                    <p x-show="p.price !== null" class="text-right">
+                                    <button type="button" x-show="p.shareable" x-on:click="share()" :disabled="sharing"
+                                        class="flex items-center gap-1.5 rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold hover:bg-emerald-500 disabled:opacity-60">
+                                        <flux:icon icon="share" variant="mini" class="size-4" x-show="! sharing" />
+                                        <flux:icon icon="arrow-path" variant="mini" class="size-4 animate-spin" x-show="sharing" />
+                                        <span x-text="sharing ? 'Preparando...' : 'Compartir'"></span>
+                                    </button>
+                                    <p x-show="p.price !== null && ! p.shareable" class="text-right">
                                         <span class="block text-xl font-bold" x-text="`S/ ${Number(p.price).toFixed(2)}`"></span>
                                         <span class="text-[11px] text-white/60" x-text="p.priceLabel"></span>
                                     </p>

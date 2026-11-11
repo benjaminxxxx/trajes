@@ -20,6 +20,7 @@ use App\Livewire\Inventory\CategoryIndex;
 use App\Livewire\Inventory\CharacteristicCatalog;
 use App\Livewire\Inventory\CompanyValuation;
 use App\Livewire\Inventory\PhysicalItemTracker;
+use App\Livewire\Inventory\ProductCatalog;
 use App\Livewire\Inventory\ProductIndex;
 use App\Livewire\Maintenance\LaundryIndex;
 use App\Livewire\Maintenance\MaintenanceHistory;
@@ -78,6 +79,8 @@ Route::middleware(['auth', 'verified', 'account'])->group(function () {
     Route::middleware('can:inventario.productos')->group(function () {
         Route::get('inventario/productos', ProductIndex::class)->name('inventory.products.index');
     });
+    Route::get('catalogo', ProductCatalog::class)->name('inventory.catalog.index')
+        ->middleware('can:catalogo.ver');
     Route::get('inventario/prendas-fisicas', PhysicalItemTracker::class)->name('inventory.physical-items.index')
         ->middleware('can:inventario.seguimiento');
     Route::get('inventario/bienes', AssetIndex::class)->name('inventory.assets.index')

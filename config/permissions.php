@@ -51,6 +51,10 @@ return [
         'inventario.bienes' => 'Gestionar los bienes del negocio (mobiliario, consumibles...)',
         'inventario.valorizado' => 'Ver el valorizado de la empresa',
 
+        // Catálogo para clientes
+        'catalogo.ver' => 'Ver el catálogo de prendas y compartirlo por WhatsApp',
+        'catalogo.costos' => 'Ver en el catálogo el costo, la ganancia y el proveedor',
+
         // Compras
         'compras.ver' => 'Ver compras',
         'compras.registrar' => 'Registrar compras',
@@ -85,6 +89,8 @@ return [
             'alquileres.recepcionar',
             'clientes.ver',
             'clientes.registrar',
+            'catalogo.ver',
+            'catalogo.costos',
         ],
     ],
 

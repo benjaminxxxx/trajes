@@ -28,6 +28,7 @@ return [
         'items' => [
             ['label' => 'Nueva venta', 'icon' => 'shopping-cart', 'route' => 'sale.sales.create', 'permission' => 'ventas.registrar'],
             ['label' => 'Historial de ventas', 'icon' => 'document-text', 'route' => 'sale.sales.index', 'permission' => 'ventas.ver'],
+            ['label' => 'Catálogo para clientes', 'icon' => 'book-open', 'route' => 'inventory.catalog.index', 'permission' => 'catalogo.ver'],
         ],
     ],
     [
